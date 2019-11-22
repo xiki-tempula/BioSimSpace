@@ -41,6 +41,7 @@ from Sire import MM as _SireMM
 from Sire import Mol as _SireMol
 from Sire import Units as _SireUnits
 
+from BioSimSpace import _isVerbose
 from BioSimSpace._Exceptions import IncompatibleError as _IncompatibleError
 from BioSimSpace.Types import Length as _Length
 
@@ -368,8 +369,12 @@ class Molecule(_SireWrapper):
             # Query the Sire system.
             search_result = self._sire_object.search(query)
 
-        except:
-            raise ValueError("'Invalid search query: %r" % query) from None
+        except Exception as e:
+            msg = "'Invalid search query: %r" % query
+            if _isVerbose():
+                raise ValueError(msg) from e
+            else:
+                raise ValueError(msg) from None
 
         return _SearchResult(search_result)
 
@@ -523,8 +528,12 @@ class Molecule(_SireWrapper):
                             print("  %s" % _property_map[prop])
                         try:
                             edit_mol = edit_mol.setProperty(_property_map[prop], mol1.property(prop))
-                        except:
-                            raise _IncompatibleError("Failed to set property '%s'" % _property_map[prop]) from None
+                        except Exception as e:
+                            msg = "Failed to set property '%s'" % _property_map[prop]
+                            if _isVerbose():
+                                raise _IncompatibleError(msg) from e
+                            else:
+                                raise _IncompatibleError(msg) from None
 
         # The atom order is different, we need to map the atoms when setting properties.
         else:
@@ -552,9 +561,12 @@ class Molecule(_SireWrapper):
                             try:
                                 edit_mol = edit_mol.atom(idx0).setProperty(_property_map[prop], mol1.atom(idx1).property(prop)).molecule()
                                 seen_prop[prop] = True
-                            except:
-                                raise _IncompatibleError("Failed to copy property '%s' from %s to %s."
-                                    % (_property_map[prop], idx1, idx0)) from None
+                            except Exception as e:
+                                msg = "Failed to copy property '%s' from %s to %s." % (_property_map[prop], idx1, idx0)
+                                if _isVerbose():
+                                    raise _IncompatibleError(msg) from e
+                                else:
+                                    raise _IncompatibleError(msg) from None
 
             # Now deal with all unseen properties. These will be non atom-based
             # properties, such as TwoAtomFunctions, StringProperty, etc.
@@ -579,8 +591,12 @@ class Molecule(_SireWrapper):
                             if hasattr(propty, "makeCompatibleWith"):
                                 try:
                                     propty = propty.makeCompatibleWith(mol0, matches)
-                                except:
-                                    raise _IncompatibleError("Incompatible property: %s" % _property_map[prop]) from None
+                                except Exception as e:
+                                    msg = "Incompatible property: %s" % _property_map[prop]
+                                    if _isVerbose():
+                                        raise _IncompatibleError(msg) from e
+                                    else:
+                                        raise _IncompatibleError(msg) from None
 
                             # Now try to set the property.
                             edit_mol.setProperty(_property_map[prop], propty)
@@ -602,8 +618,12 @@ class Molecule(_SireWrapper):
                 # Try to rename the atom.
                 try:
                     edit_mol = edit_mol.atom(idx0).rename(mol1.atom(idx1).name()).molecule()
-                except:
-                    raise _IncompatibleError("Failed to rename atom: %s --> %s" % (name0, name1)) from None
+                except Exception as e:
+                    msg = "Failed to rename atom: %s --> %s" % (name0, name1)
+                    if _isVerbose():
+                        raise _IncompatibleError(msg) from e
+                    else:
+                        raise _IncompatibleError(msg) from None
 
         # Commit the changes.
         self._sire_object = edit_mol.commit()
@@ -2996,7 +3016,7 @@ def _is_ring_broken(conn0, conn1, idx0, idy0, idx1, idy1):
     # If we get this far, then a ring wasn't broken.
     return False
 
-def _is_ring_size_changed(conn0, conn1, idx0, idy0, idx1, idy1):
+def _is_ring_size_changed(conn0, conn1, idx0, idy0, idx1, idy1, max_ring_size=12):
     """Internal function to test whether a perturbation changes the connectivity
        around two atoms such that a ring changes size.
 
@@ -3020,14 +3040,17 @@ def _is_ring_size_changed(conn0, conn1, idx0, idy0, idx1, idy1):
 
        idy1 : Sire.Mol.AtomIdx
            The index of the second atom in the second state.
+
+       max_ring_size : int
+           The maximum size of what is considered to be a ring.
     """
 
     # Have a ring changed size? If so, then the minimum path size between
     # two atoms will have changed.
 
     # Work out the paths connecting the atoms in the two end states.
-    paths0 = conn0.findPaths(idx0, idy0)
-    paths1 = conn1.findPaths(idx1, idy1)
+    paths0 = conn0.findPaths(idx0, idy0, max_ring_size)
+    paths1 = conn1.findPaths(idx1, idy1, max_ring_size)
 
     # Initalise the ring size in each end state.
     ring0 = None

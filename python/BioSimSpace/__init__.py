@@ -56,30 +56,58 @@ except ModuleNotFoundError:
         + "Python interpreter: www.siremol.org")
 
 # Determine whether we're being imported from a Jupyter notebook.
-def _is_notebook():
-    try:
-        shell = get_ipython().__class__.__name__
-        if shell == 'ZMQInteractiveShell':
-            return True   # Jupyter notebook or qtconsole
-        elif shell == 'TerminalInteractiveShell':
-            return False  # Terminal running IPython
-        else:
-            return False  # Other type (?)
-    except NameError:
-        return False      # Probably standard Python interpreter
+try:
+    shell = get_ipython().__class__.__name__
+    if shell == 'ZMQInteractiveShell':
+        _is_notebook = True   # Jupyter notebook or qtconsole
+    elif shell == 'TerminalInteractiveShell':
+        _is_notebook = False  # Terminal running IPython
+    else:
+        _is_notebook = False  # Other type (?)
+except NameError:
+    _is_notebook = False      # Probably standard Python interpreter
 
 # Determine whether we're being run interactively.
-def _is_interactive():
-    try:
-        shell = get_ipython().__class__.__name__
-        if shell == 'ZMQInteractiveShell':
-            return True   # Jupyter notebook or qtconsole
-        elif shell == 'TerminalInteractiveShell':
-            return True   # Terminal running IPython
-        else:
-            return False  # Other type (?)
-    except NameError:
-        return False      # Probably standard Python interpreter
+try:
+    shell = get_ipython().__class__.__name__
+    if shell == 'ZMQInteractiveShell':
+        _is_interactive = True   # Jupyter notebook or qtconsole
+    elif shell == 'TerminalInteractiveShell':
+        _is_interactive = True   # Terminal running IPython
+    else:
+        _is_interactive = False  # Other type (?)
+except NameError:
+    _is_interactive = False      # Probably standard Python interpreter
+
+# Default to non-verbose error messages.
+_is_verbose = False
+
+def setVerbose(verbose):
+    """Set verbosity of error messages.
+
+       Parameters
+       ----------
+
+       verbose : bool
+           Whether to print verbose error messages.
+    """
+    if type(verbose) is not bool:
+        raise TypeError("'verbose' must be of type 'bool'.")
+
+    global _is_verbose
+    _is_verbose = verbose
+
+def _isVerbose():
+    """Whether verbose error messages are active.
+
+       Returns
+       ------
+
+       is_verbose : bool
+           Whether verbose error messages are active.
+    """
+    global _is_verbose
+    return _is_verbose
 
 from os import environ as _environ
 from warnings import warn as _warn
@@ -165,33 +193,6 @@ from . import Solvent
 from . import Trajectory
 from . import Types
 from . import Units
-
-# Top-level functions.
-
-def viewMolecules(files, idxs=None):
-    """View the molecules contained in the passed file(s). Optionally supply
-       a list of indices of molecules you want to view. This views the molecules
-       and also returns a view object that will allow you to change the view,
-       e.g. choosing different molecules to view etc.
-    """
-
-    if not _is_notebook():
-        _warn("You can only view molecules from within a Jupyter notebook.")
-        return None
-
-    if isinstance(files, str):
-        files = [files]
-
-    print("Reading molecules from '%s'" % files)
-    s = IO.readMolecules(files)
-
-    print("Rendering the molecules...")
-    v = Notebook.View(s)
-
-    if idxs:
-        return v.molecules(idxs)
-    else:
-        return v.system()
 
 from ._version import get_versions
 __version__ = get_versions()['version']

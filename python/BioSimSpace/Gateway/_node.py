@@ -38,9 +38,10 @@ import warnings as _warnings
 import yaml as _yaml
 
 from BioSimSpace import _is_notebook
+from BioSimSpace import setVerbose
 
 # Enable Jupyter widgets.
-if _is_notebook():
+if _is_notebook:
     from IPython.display import FileLink as _FileLink
 
     import fileupload as _fileupload
@@ -102,7 +103,7 @@ class Node():
     _is_knime = False
 
     # Whether the node is run from a Jupyter notebook.
-    _is_notebook = _is_notebook()
+    _is_notebook = _is_notebook
 
     def __init__(self, description, name=None):
         """Constructor.
@@ -179,6 +180,8 @@ class Node():
             self._optional = self._parser.add_argument_group("Optional arguments")
             self._optional.add_argument("-h", "--help", action="help", help="Show this help message and exit.")
             self._optional.add_argument("-c", "--config", is_config_file=True, help="Path to configuration file.")
+            self._optional.add_argument("-v", "--verbose", type=_str2bool, nargs='?', const=True, default=False,
+                                        help="Print verbose error messages.")
 
             # Overload the "_check_value" method for more flexible string support.
             # (Ignore whitespace and case insensitive.)
@@ -998,8 +1001,11 @@ class Node():
 
             # Now loop over the arguments and set the input values.
             for key, value in args.items():
-                if key is not "config":
-                    self._inputs[key].setValue(value, name=key)
+                if key is "verbose":
+                    setVerbose(value)
+                else:
+                    if key is not "config":
+                        self._inputs[key].setValue(value, name=key)
 
     def validate(self, file_prefix="output"):
         """Whether the output requirements are satisfied.

@@ -53,7 +53,9 @@ from Sire import Mol as _SireMol
 from Sire import System as _SireSystem
 
 from BioSimSpace import _gromacs_path
+from BioSimSpace import _isVerbose
 from BioSimSpace._SireWrappers import Molecule as _Molecule
+from BioSimSpace._SireWrappers import Molecules as _Molecules
 from BioSimSpace._SireWrappers import System as _System
 
 # Context manager for capturing stdout.
@@ -241,6 +243,12 @@ def readMolecules(files, property_map={}):
 
        >>> import BioSimSpace as BSS
        >>> system = BSS.IO.readMolecules(BSS.IO.glob("dir/*"))
+
+       Load a molecular system from GROMACS coordinate and topology files using
+       a custom GROMACS topology directory.
+
+       >>> import BioSimSpace as BSS
+       >>> system = BSS.IO.readMolecules(["mol.gro87", "mol.grotop"], property_map={"GROMACS_PATH" : "/path/to/gromacs/topology"})
     """
 
     global _has_gmx_warned
@@ -283,12 +291,23 @@ def readMolecules(files, property_map={}):
             msg = ("Failed to read molecules from %s. "
                    "It looks like you failed to include a topology file."
                   ) % files
-            raise IOError(msg) from None
+            if _isVerbose():
+                raise IOError(msg) from e
+            else:
+                raise IOError(msg) from None
         else:
             if "Incompatibility" in str(e):
-                raise IOError("Incompatibility between molecular information in files: %s" % files) from None
+                msg = "Incompatibility between molecular information in files: %s" % files
+                if _isVerbose():
+                    raise IOError(msg) from e
+                else:
+                    raise IOError(msg) from None
             else:
-                raise IOError("Failed to read molecules from: %s" % files) from None
+                msg = "Failed to read molecules from: %s" % files
+                if _isVerbose():
+                    raise IOError(msg) from e
+                else:
+                    raise IOError(msg) from None
 
     return _System(system)
 
@@ -443,10 +462,14 @@ def saveMolecules(filebase, system, fileformat, property_map={}):
         try:
             file = _SireIO.MoleculeParser.save(system._getSireObject(), filebase, _property_map)
             files += file
-        except:
+        except Exception as e:
             if dirname != "":
                 _os.chdir(dir)
-            raise IOError("Failed to save system to format: '%s'" % format) from None
+            msg = "Failed to save system to format: '%s'" % format
+            if _isVerbose():
+                raise IOError(msg) from e
+            else:
+                raise IOError(msg) from None
 
     # Change back to the original directory.
     if dirname != "":
