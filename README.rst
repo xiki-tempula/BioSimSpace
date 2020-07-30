@@ -28,6 +28,27 @@ for biomolecular simulation. With it you can:
   run in different ways, e.g. command-line, `Jupyter <https://jupyter.org>`__.
 * Interact with molecular-simulation processes in real time.
 
+Citation |DOI for Citing BioSimSpace|
+=====================================
+
+If you use BioSimSpace in any scientific software, please cite the following paper: ::
+
+    @article{Hedges2019,
+      doi = {10.21105/joss.01831},
+      url = {https://doi.org/10.21105/joss.01831},
+      year = {2019},
+      publisher = {The Open Journal},
+      volume = {4},
+      number = {43},
+      pages = {1831},
+      author = {Lester Hedges and Antonia Mey and Charles Laughton and Francesco Gervasio and Adrian Mulholland and Christopher Woods and Julien Michel},
+      title = {BioSimSpace: An interoperable Python framework for biomolecular simulation},
+      journal = {Journal of Open Source Software}
+    }
+
+.. |DOI for Citing BioSimSpace| image:: https://joss.theoj.org/papers/4ba84ad443693b5dded90e35bf5f8225/status.svg
+   :target: https://joss.theoj.org/papers/4ba84ad443693b5dded90e35bf5f8225
+
 Documentation
 -------------
 
@@ -56,7 +77,6 @@ need to enable the required notebook extensions within your Conda environment:
 
 .. code-block:: bash
 
-    jupyter-nbextension enable fileupload --py --sys-prefix
     jupyter-nbextension enable nglview --py --sys-prefix
 
 Unless you add the required channels to your Conda configuration, then you'll
@@ -89,8 +109,8 @@ Using the prebuilt binaries
 The latest self-extracting binary for the development version of BioSimSpace
 can be downloaded from one of the following links:
 
-* Linux: `biosimspace_devel_latest_linux.run <https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/ZH4wscDHe59T28yVJtrMH8uqifI_ih0NL5IyqxXQjSo/n/chryswoods/b/biosimspace_releases/o/biosimspace_devel_latest_linux.run>`__
-* Mac OS X: `biosimspace_devel_latest_osx.run <https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/whcwfvWfndjA4RxupM-4gsVsjcdR0w5I9aP1RJKPruQ/n/chryswoods/b/biosimspace_releases/o/biosimspace_devel_latest_osx.run>`__
+* Linux: `biosimspace_devel_latest_linux.run <https://objectstorage.eu-frankfurt-1.oraclecloud.com/n/hugs/b/biosimspace_releases/o/biosimspace_devel_latest_linux.run>`__
+* macOS: `biosimspace_devel_latest_osx.run <https://objectstorage.eu-frankfurt-1.oraclecloud.com/n/hugs/b/biosimspace_releases/o/biosimspace_devel_latest_osx.run>`__
 
 Once downloaded, the binary can be unpacked as follows:
 

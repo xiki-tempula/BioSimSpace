@@ -1,7 +1,7 @@
 ######################################################################
 # BioSimSpace: Making biomolecular simulation a breeze!
 #
-# Copyright: 2017-2019
+# Copyright: 2017-2020
 #
 # Authors: Lester Hedges <lester.hedges@gmail.com>
 #
@@ -615,6 +615,12 @@ class Gromacs(_process.Process):
         self.setArg("-v", True)             # Verbose output.
         self.setArg("-deffnm", self._name)  # Output file prefix.
 
+        # Is this a vacuum simulation? If so, run in single-threaded mode to
+        # avoid domain decomposition.
+        if _is_vacuum(self._config):
+            self.setArg("-ntomp", 1)        # Single OMP thread.
+            self.setArg("-ntmpi", 1)        # Single MPI thread.
+
         # Metadynamics arguments.
         if type(self._protocol) is _Protocol.Metadynamics:
             self.setArg("-plumed", "plumed.dat")
@@ -771,11 +777,9 @@ class Gromacs(_process.Process):
                 old_system._updateCoordinates(new_system)
 
                 # Update the periodic box information in the original system.
-                try:
+                if "space" in new_system._sire_object.propertyKeys():
                     box = new_system._sire_object.property("space")
                     old_system._sire_object.setProperty(self._property_map.get("space", "space"), box)
-                except:
-                    pass
 
                 return old_system
 
@@ -2069,8 +2073,8 @@ def _is_minimisation(config):
     """
 
     for line in config:
-        # Remove any whitespace.
-        line = line.replace(" ", "")
+        # Convert to lower-case and remove any whitespace.
+        line = line.lower().replace(" ", "")
 
         # Check for integrators used for minimisation.
         if "integrator=steep" in line or \
@@ -2079,3 +2083,38 @@ def _is_minimisation(config):
                return True
 
     return False
+
+def _is_vacuum(config):
+    """Helper functin to check whether a configuration corresponds to a
+       vacuum simulation.
+
+       Parameters
+       ----------
+
+       config : [str]
+           A list of configuration strings.
+
+       Returns
+       -------
+
+       is_vacuum : bool
+           Whether this is (likely) a vacuum configuration.
+    """
+
+    # Join all of the config strings together.
+    config = "".join(config)
+
+    # Convert to lower-case and remove any whitespace.
+    config = config.lower().replace(" ", "")
+
+    # Check for likely indicators of a vacuum simulation.
+    # These can be adapted as we think of more, or options
+    # change.
+    if "pbc=no"     in config and \
+       "nstlist=0"  in config and \
+       "rlist=0"    in config and \
+       "rvdw=0"     in config and \
+       "rcoulomb=0" in config:
+           return True
+    else:
+        return False

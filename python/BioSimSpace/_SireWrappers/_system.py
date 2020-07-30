@@ -1,7 +1,7 @@
 ######################################################################
 # BioSimSpace: Making biomolecular simulation a breeze!
 #
-# Copyright: 2017-2019
+# Copyright: 2017-2020
 #
 # Authors: Lester Hedges <lester.hedges@gmail.com>
 #
@@ -393,10 +393,13 @@ class System(_SireWrapper):
         # Otherwise, add the molecules to the existing "all" group.
         else:
             if is_sire_container:
-                try:
-                    molecules = molecules._sire_object.molecules()
-                except:
+                if type(molecules) is _Molecules:
                     molecules = molecules._sire_object
+                else:
+                    try:
+                        molecules = molecules._sire_object.at(_SireMol.MGNum(1))
+                    except:
+                        molecules = molecules._sire_object.molecules()
                 self._sire_object.add(molecules, _SireMol.MGName("all"))
             else:
                 for mol in molecules:

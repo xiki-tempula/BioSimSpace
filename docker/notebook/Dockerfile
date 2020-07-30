@@ -4,10 +4,13 @@ FROM $BASE_CONTAINER
 
 LABEL maintainer="Christopher Woods <Christopher.Woods@bristol.ac.uk>, Lester Hedges <lester.hedges@gmail.com>"
 
-# Variables holding links to download dependencies.
-ENV AMBER_DOWNLOAD=https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/RHIfl-cHK9QqvzCsqFRMGpijRoHRPC-ZiATsjWzUgD0/n/chryswoods/b/downloads/o/amber.tar.bz2
-ENV GROMACS_DOWNLOAD=https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/L_wxiMnhIDBO-CeO0M6toS8egsIvZXWQ7AGJiVEpYk4/n/chryswoods/b/downloads/o/gromacs.tar.bz2
-ENV PLUMED_DOWNLOAD=https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/em4QTi3Q3cH3lDhrksODgX7oZ9CCn-k1J44GzI98G4w/n/chryswoods/b/downloads/o/plumed.tar.bz2
+# Variables holding links to download dependencies
+ENV AMBER_DOWNLOAD=https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/_4HhZazLxgkcRLxZbmGPuGV0ciotx3V7kDeqh8fgy7Y/n/hugs/b/notebook/o/amber.tar.bz2
+ENV GROMACS_DOWNLOAD=https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/HmW0HXTrRsvOPz9uHucA0hDsGdyNmnoe1jfcdoHiZJk/n/hugs/b/notebook/o/gromacs.tar.bz2
+ENV PLUMED_DOWNLOAD=https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/peJ15kXeAtNpRbgNvAcjpyx04qLKd4GsbEzuL5VNbSM/n/hugs/b/notebook/o/plumed.tar.bz2
+
+# Not used here, but maybe somewhere else?
+ENV KCOMBU_DOWNLOAD=https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/lRplAwerQbpz3PFPhVtkc7O_Tj9RENtj4KS8MW54OGA/n/hugs/b/notebook/o/kcombu-src-20190208.tar.gz
 
 USER root
 WORKDIR /home
@@ -51,16 +54,14 @@ WORKDIR $HOME
 
 # Install BioSimSpace via Conda and dependencies for PLUMED.
 RUN conda install -y -c conda-forge -c omnia -c michellab/label/dev biosimspace && \
-    conda install -y -c conda-forge openmpi-mpicc openssh patch
+    conda install -y -c conda-forge openmpi-mpicc=4.0.1 openssh patch
 
 RUN pip install --upgrade pip && \
     pip install jupyterhub-tmpauthenticator
 
-# Install and enable nglview and fileupload.
+# Install and enable nglview.
 RUN jupyter-nbextension install nglview --py --sys-prefix && \
-    jupyter-nbextension enable nglview --py --sys-prefix && \
-    jupyter-nbextension install fileupload --py --sys-prefix && \
-    jupyter-nbextension enable fileupload --py --sys-prefix
+    jupyter-nbextension enable nglview --py --sys-prefix
 
 # Clean up after conda, including clearing the cache.
 RUN conda clean -tipsy && \

@@ -1,7 +1,7 @@
 ######################################################################
 # BioSimSpace: Making biomolecular simulation a breeze!
 #
-# Copyright: 2017-2019
+# Copyright: 2017-2020
 #
 # Authors: Lester Hedges <lester.hedges@gmail.com>
 #
@@ -885,9 +885,22 @@ class Molecule(_SireWrapper):
 
             # 1) Atoms.
 
+            def atom_sorting_criteria(atom):
+                LJ0 = atom.property("LJ0");
+                LJ1 = atom.property("LJ1");
+                return (atom.name().value(),
+                        atom.property("ambertype0"),
+                        atom.property("ambertype1"),
+                        LJ0.sigma().value(),
+                        LJ1.sigma().value(),
+                        LJ0.epsilon().value(),
+                        LJ1.epsilon().value(),
+                        atom.property("charge0").value(),
+                        atom.property("charge1").value())
+
             # Print all atom records.
             if print_all_atoms:
-                for atom in mol.atoms():
+                for atom in sorted(mol.atoms(), key=lambda atom: atom_sorting_criteria(atom)):
                     # Start atom record.
                     file.write("    atom\n")
 
@@ -909,7 +922,7 @@ class Molecule(_SireWrapper):
 
             # Only print records for the atoms that are perturbed.
             else:
-                for idx in pert_idxs:
+                for idx in sorted(pert_idxs, key=lambda idx: atom_sorting_criteria(mol.atom(idx))):
                     # Get the perturbed atom.
                     atom = mol.atom(idx)
 
@@ -991,8 +1004,20 @@ class Molecule(_SireWrapper):
 
             # First create records for the bonds that are unique to lambda = 0 and 1.
 
+            def sort_bonds(bonds, idx):
+                # Get the bond potential.
+                bond = bonds[idx]
+
+                # Get the AtomIdx for the atoms in the bond.
+                idx0 = info.atomIdx(bond.atom0())
+                idx1 = info.atomIdx(bond.atom1())
+
+                return (mol.atom(idx0).name().value(),
+                        mol.atom(idx1).name().value())
+
             # lambda = 0.
-            for idx in bonds0_unique_idx.values():
+            for idx in sorted(bonds0_unique_idx.values(),
+                              key=lambda idx: sort_bonds(bonds0, idx)):
                 # Get the bond potential.
                 bond = bonds0[idx]
 
@@ -1003,7 +1028,7 @@ class Molecule(_SireWrapper):
                 # Cast the function as an AmberBond.
                 amber_bond = _SireMM.AmberBond(bond.function(), _SireCAS.Symbol("r"))
 
-                # Start angle record.
+                # Start bond record.
                 file.write("    bond\n")
 
                 # Bond data.
@@ -1018,7 +1043,8 @@ class Molecule(_SireWrapper):
                 file.write("    endbond\n")
 
             # lambda = 1.
-            for idx in bonds1_unique_idx.values():
+            for idx in sorted(bonds1_unique_idx.values(),
+                              key=lambda idx: sort_bonds(bonds1, idx)):
                 # Get the bond potential.
                 bond = bonds1[idx]
 
@@ -1029,7 +1055,7 @@ class Molecule(_SireWrapper):
                 # Cast the function as an AmberBond.
                 amber_bond = _SireMM.AmberBond(bond.function(), _SireCAS.Symbol("r"))
 
-                # Start angle record.
+                # Start bond record.
                 file.write("    bond\n")
 
                 # Bond data.
@@ -1044,7 +1070,8 @@ class Molecule(_SireWrapper):
                 file.write("    endbond\n")
 
             # Now add records for the shared bonds.
-            for idx0, idx1 in bonds_shared_idx.values():
+            for idx0, idx1 in sorted(bonds_shared_idx.values(),
+                                     key=lambda idx_pair: sort_bonds(bonds0, idx_pair[0])):
                 # Get the bond potentials.
                 bond0 = bonds0[idx0]
                 bond1 = bonds1[idx1]
@@ -1158,8 +1185,22 @@ class Molecule(_SireWrapper):
 
             # First create records for the angles that are unique to lambda = 0 and 1.
 
+            def sort_angles(angles, idx):
+                # Get the angle potential.
+                angle = angles[idx]
+
+                # Get the AtomIdx for the atoms in the angle.
+                idx0 = info.atomIdx(angle.atom0())
+                idx1 = info.atomIdx(angle.atom1())
+                idx2 = info.atomIdx(angle.atom2())
+
+                return (mol.atom(idx1).name().value(),
+                        mol.atom(idx0).name().value(),
+                        mol.atom(idx2).name().value())
+
             # lambda = 0.
-            for idx in angles0_unique_idx.values():
+            for idx in sorted(angles0_unique_idx.values(),
+                              key=lambda idx: sort_angles(angles0, idx)):
                 # Get the angle potential.
                 angle = angles0[idx]
 
@@ -1187,7 +1228,8 @@ class Molecule(_SireWrapper):
                 file.write("    endangle\n")
 
             # lambda = 1.
-            for idx in angles1_unique_idx.values():
+            for idx in sorted(angles1_unique_idx.values(),
+                              key=lambda idx: sort_angles(angles1, idx)):
                 # Get the angle potential.
                 angle = angles1[idx]
 
@@ -1215,7 +1257,8 @@ class Molecule(_SireWrapper):
                 file.write("    endangle\n")
 
             # Now add records for the shared angles.
-            for idx0, idx1 in angles_shared_idx.values():
+            for idx0, idx1 in sorted(angles_shared_idx.values(),
+                                     key=lambda idx_pair: sort_angles(angles0, idx_pair[0])):
                 # Get the angle potentials.
                 angle0 = angles0[idx0]
                 angle1 = angles1[idx1]
@@ -1332,8 +1375,24 @@ class Molecule(_SireWrapper):
 
             # First create records for the dihedrals that are unique to lambda = 0 and 1.
 
+            def sort_dihedrals(dihedrals, idx):
+                # Get the dihedral potential.
+                dihedral = dihedrals[idx]
+
+                # Get the AtomIdx for the atoms in the angle.
+                idx0 = info.atomIdx(dihedral.atom0())
+                idx1 = info.atomIdx(dihedral.atom1())
+                idx2 = info.atomIdx(dihedral.atom2())
+                idx3 = info.atomIdx(dihedral.atom3())
+
+                return (mol.atom(idx1).name().value(),
+                        mol.atom(idx2).name().value(),
+                        mol.atom(idx0).name().value(),
+                        mol.atom(idx3).name().value())
+
             # lambda = 0.
-            for idx in dihedrals0_unique_idx.values():
+            for idx in sorted(dihedrals0_unique_idx.values(),
+                              key=lambda idx: sort_dihedrals(dihedrals0, idx)):
                 # Get the dihedral potential.
                 dihedral = dihedrals0[idx]
 
@@ -1355,11 +1414,13 @@ class Molecule(_SireWrapper):
                 file.write("        atom2          %s\n" % mol.atom(idx2).name().value())
                 file.write("        atom3          %s\n" % mol.atom(idx3).name().value())
                 file.write("        initial_form  ")
-                for term in amber_dihedral.terms():
+                amber_dihedral_terms_sorted = sorted(
+                    amber_dihedral.terms(), key=lambda t: (t.k(), t.periodicity(), t.phase()))
+                for term in amber_dihedral_terms_sorted:
                     file.write(" %5.4f %.1f %7.6f" % (term.k(), term.periodicity(), term.phase()))
                 file.write("\n")
                 file.write("        final form    ")
-                for term in amber_dihedral.terms():
+                for term in amber_dihedral_terms_sorted:
                     file.write(" %5.4f %.1f %7.6f" % (0.0, term.periodicity(), term.phase()))
                 file.write("\n")
 
@@ -1367,7 +1428,8 @@ class Molecule(_SireWrapper):
                 file.write("    enddihedral\n")
 
             # lambda = 1.
-            for idx in dihedrals1_unique_idx.values():
+            for idx in sorted(dihedrals1_unique_idx.values(),
+                              key=lambda idx: sort_dihedrals(dihedrals1, idx)):
                 # Get the dihedral potential.
                 dihedral = dihedrals1[idx]
 
@@ -1389,11 +1451,13 @@ class Molecule(_SireWrapper):
                 file.write("        atom2          %s\n" % mol.atom(idx2).name().value())
                 file.write("        atom3          %s\n" % mol.atom(idx3).name().value())
                 file.write("        initial_form  ")
-                for term in amber_dihedral.terms():
+                amber_dihedral_terms_sorted = sorted(
+                    amber_dihedral.terms(), key=lambda t: (t.k(), t.periodicity(), t.phase()))
+                for term in amber_dihedral_terms_sorted:
                     file.write(" %5.4f %.1f %7.6f" % (0.0, term.periodicity(), term.phase()))
                 file.write("\n")
                 file.write("        final_form    ")
-                for term in amber_dihedral.terms():
+                for term in amber_dihedral_terms_sorted:
                     file.write(" %5.4f %.1f %7.6f" % (term.k(), term.periodicity(), term.phase()))
                 file.write("\n")
 
@@ -1401,7 +1465,8 @@ class Molecule(_SireWrapper):
                 file.write("    enddihedral\n")
 
             # Now add records for the shared dihedrals.
-            for idx0, idx1 in dihedrals_shared_idx.values():
+            for idx0, idx1 in sorted(dihedrals_shared_idx.values(),
+                                     key=lambda idx_pair: sort_dihedrals(dihedrals0, idx_pair[0])):
                 # Get the dihedral potentials.
                 dihedral0 = dihedrals0[idx0]
                 dihedral1 = dihedrals1[idx1]
@@ -1474,7 +1539,8 @@ class Molecule(_SireWrapper):
                             file.write("        atom2          %s\n" % mol.atom(idx2).name().value())
                             file.write("        atom3          %s\n" % mol.atom(idx3).name().value())
                             file.write("        initial_form  ")
-                            for term in amber_dihedral0.terms():
+                            for term in sorted(amber_dihedral0.terms(),
+                                               key=lambda t: (t.k(), t.periodicity(), t.phase())):
                                 if zero_k and has_dummy_initial:
                                     k = 0.0
                                 else:
@@ -1482,7 +1548,8 @@ class Molecule(_SireWrapper):
                                 file.write(" %5.4f %.1f %7.6f" % (k, term.periodicity(), term.phase()))
                             file.write("\n")
                             file.write("        final_form    ")
-                            for term in amber_dihedral1.terms():
+                            for term in sorted(amber_dihedral1.terms(),
+                                               key=lambda t: (t.k(), t.periodicity(), t.phase())):
                                 if zero_k and has_dummy_final:
                                     k = 0.0
                                 else:
@@ -1590,11 +1657,13 @@ class Molecule(_SireWrapper):
                 file.write("        atom2          %s\n" % mol.atom(idx2).name().value())
                 file.write("        atom3          %s\n" % mol.atom(idx3).name().value())
                 file.write("        initial_form  ")
-                for term in amber_dihedral.terms():
+                amber_dihedral_terms_sorted = sorted(
+                    amber_dihedral.terms(), key=lambda t: (t.k(), t.periodicity(), t.phase()))
+                for term in amber_dihedral_terms_sorted:
                     file.write(" %5.4f %.1f %7.6f" % (term.k(), term.periodicity(), term.phase()))
                 file.write("\n")
                 file.write("        final form    ")
-                for term in amber_dihedral.terms():
+                for term in amber_dihedral_terms_sorted:
                     file.write(" %5.4f %.1f %7.6f" % (0.0, term.periodicity(), term.phase()))
                 file.write("\n")
 
@@ -1624,11 +1693,13 @@ class Molecule(_SireWrapper):
                 file.write("        atom2          %s\n" % mol.atom(idx2).name().value())
                 file.write("        atom3          %s\n" % mol.atom(idx3).name().value())
                 file.write("        initial_form  ")
-                for term in amber_dihedral0.terms():
+                for term in sorted(amber_dihedral0.terms(),
+                                   key=lambda t: (t.k(), t.periodicity(), t.phase())):
                     file.write(" %5.4f %.1f %7.6f" % (0.0, term.periodicity(), term.phase()))
                 file.write("\n")
                 file.write("        final_form    ")
-                for term in amber_dihedral1.terms():
+                for term in sorted(amber_dihedral1.terms(),
+                                   key=lambda t: (t.k(), t.periodicity(), t.phase())):
                     file.write(" %5.4f %.1f %7.6f" % (term.k(), term.periodicity(), term.phase()))
                 file.write("\n")
 
@@ -1709,7 +1780,8 @@ class Molecule(_SireWrapper):
                             file.write("        atom2          %s\n" % mol.atom(idx2).name().value())
                             file.write("        atom3          %s\n" % mol.atom(idx3).name().value())
                             file.write("        initial_form  ")
-                            for term in amber_dihedral0.terms():
+                            for term in sorted(amber_dihedral0.terms(),
+                                               key=lambda t: (t.k(), t.periodicity(), t.phase())):
                                 if zero_k and has_dummy_initial:
                                     k = 0.0
                                 else:
@@ -1717,7 +1789,8 @@ class Molecule(_SireWrapper):
                                 file.write(" %5.4f %.1f %7.6f" % (k, term.periodicity(), term.phase()))
                             file.write("\n")
                             file.write("        final_form    ")
-                            for term in amber_dihedral1.terms():
+                            for term in sorted(amber_dihedral1.terms(),
+                                               key=lambda t: (t.k(), t.periodicity(), t.phase())):
                                 if zero_k and has_dummy_final:
                                     k = 0.0
                                 else:
@@ -1960,7 +2033,7 @@ class Molecule(_SireWrapper):
         # Force field information is missing.
         if not molecule0.hasProperty(ff0):
             raise _IncompatibleError("Cannot determine 'forcefield' of 'molecule0'!")
-        if not molecule1.hasProperty(ff0):
+        if not molecule1.hasProperty(ff1):
             raise _IncompatibleError("Cannot determine 'forcefield' of 'molecule1'!")
 
         # The force fields are incompatible.

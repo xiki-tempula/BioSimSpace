@@ -101,8 +101,10 @@ html_theme = 'sphinx_rtd_theme'
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#html_theme_options = {}
-
+html_theme_options = {
+'logo_only': False,
+'style_nav_header_background': '#161e3c'
+}
 # pngmath_latex_preamble = r"""
 # \usepackage{color}
 # \definecolor{textgray}{RGB}{51,51,51}
