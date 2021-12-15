@@ -32,11 +32,13 @@ from Sire import Base as _SireBase
 from Sire import IO as _SireIO
 from Sire import MM as _SireMM
 from Sire import Mol as _SireMol
+from Sire import System as _SireSystem
 from Sire import Units as _SireUnits
 
 from BioSimSpace._Exceptions import IncompatibleError as _IncompatibleError
 from BioSimSpace._SireWrappers import Molecule as _Molecule
 from BioSimSpace._SireWrappers import System as _System
+from BioSimSpace._SireWrappers._fast_system import _fastRenumberMolecules
 
 def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
         allow_ring_size_change=False, force=False,
@@ -1258,16 +1260,24 @@ def _squash(system):
        system : BioSimSpace._SireWrappers.System
            The system.
     """
+    # Create a new system.
+    system = system.copy()
+    new_system = _SireSystem.System("BioSimSpace System")
+    molgrp = _SireMol.MoleculeGroup("all")
+
     # Squash the system.
-    all_molecules = []
     for molecule in system.getMolecules():
         if not molecule._is_perturbable:
-            all_molecules += [_Molecule(molecule)]
+            molgrp.add(molecule._sire_object)
         else:
-            all_molecules += [_removeDummies(molecule, False), _removeDummies(molecule, True)]
+            molgrp.add(_removeDummies(molecule, False)._sire_object)
+            molgrp.add(_removeDummies(molecule, True)._sire_object)
+
+    new_system.add(molgrp)
+    new_system = _System(new_system)
+    _fastRenumberMolecules(new_system)
 
     # Copy all the properties from the old system.
-    new_system = _System(all_molecules)
     for prop in system._sire_object.propertyKeys():
         val = system._sire_object.property(prop)
         new_system._sire_object.setProperty(prop, val)

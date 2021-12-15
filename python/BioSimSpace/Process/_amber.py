@@ -41,14 +41,15 @@ import warnings as _warnings
 from Sire import Base as _SireBase
 from Sire import IO as _SireIO
 from Sire import Mol as _SireMol
+from Sire import System as _SireSystem
 
 from BioSimSpace import _amber_home, _isVerbose
 from BioSimSpace.Align._merge import _squash
 from BioSimSpace._Exceptions import IncompatibleError as _IncompatibleError
 from BioSimSpace._Exceptions import MissingSoftwareError as _MissingSoftwareError
-from BioSimSpace._SireWrappers import Molecule as _Molecule
 from BioSimSpace._SireWrappers import System as _System
 from BioSimSpace.Types._type import Type as _Type
+from BioSimSpace._SireWrappers._fast_system import _fastRenumberMolecules
 
 from BioSimSpace import Protocol as _Protocol
 from BioSimSpace import Trajectory as _Trajectory
@@ -525,12 +526,16 @@ class Amber(_process.Process):
                     old_system_squashed._sire_object.update(mol0)
 
                 # Convert the squashed system coordinates into merged system coordinates.
+
+                # Create a new system.
+                old_system_merged = _SireSystem.System("BioSimSpace System")
+                molgrp = _SireMol.MoleculeGroup("all")
+
                 mol_idx = 0
-                molecules = []
                 for i, molecule in enumerate(old_system.getMolecules()):
                     if not molecule._is_perturbable:
                         # Just copy the molecule.
-                        molecules.append(old_system_squashed[mol_idx].copy())
+                        molgrp.add(old_system_squashed[mol_idx]._sire_object)
                         mol_idx += 1
                     else:
                         # Extract the non-dummy atom coordinates and velocities from the squashed system.
@@ -561,9 +566,13 @@ class Amber(_process.Process):
                             atom.setProperty("coordinates0", coordinates)
                             editor = atom.setProperty("coordinates1", coordinates).molecule()
                         molecule._sire_object = editor.commit()
-                        molecules.append(molecule)
+                        molgrp.add(molecule._sire_object)
                         mol_idx += 2
-                old_system = _System(molecules)
+
+                old_system_merged.add(molgrp)
+                old_system_merged = _System(old_system_merged)
+                _fastRenumberMolecules(old_system_merged)
+                old_system = old_system_merged
             else:
                 old_system._updateCoordinates(new_system,
                                               self._property_map,

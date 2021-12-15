@@ -29,6 +29,9 @@ __email__ = "lester.hedges@gmail.com"
 __all__ = ["Somd"]
 
 import os as _os
+import tempfile as _tempfile
+from pathlib import Path as _Path
+
 import pygtail as _pygtail
 import random as _random
 import string as _string
@@ -47,6 +50,7 @@ from BioSimSpace._Exceptions import IncompatibleError as _IncompatibleError
 from BioSimSpace._Exceptions import MissingSoftwareError as _MissingSoftwareError
 from BioSimSpace._SireWrappers import Molecule as _Molecule
 from BioSimSpace._SireWrappers import System as _System
+from BioSimSpace._SireWrappers._fast_system import _fastSystemInit, _fastFixSomdPDB
 
 from BioSimSpace import IO as _IO
 from BioSimSpace import Protocol as _Protocol
@@ -232,7 +236,7 @@ class Somd(_process.Process):
 
                 # Recreate the system, putting the perturbable molecule with
                 # renamed properties first.
-                updated_system = _System(pert_mol) + _System(system)
+                updated_system = _fastSystemInit(pert_mol, system)
 
                 # Copy across all of the properties from the original system.
                 for prop in system._sire_object.propertyKeys():
@@ -421,23 +425,35 @@ class Somd(_process.Process):
 
         # Try to grab the latest coordinates from the binary restart file.
         try:
+            _fastFixSomdPDB(self._restart_file)
             new_system = _IO.readMolecules(self._restart_file)
 
             # Since SOMD requires specific residue and water naming we copy the
             # coordinates back into the original system.
             old_system = self._system.copy()
 
-            old_system = self._updateCoordinates(old_system,
-                                                 new_system,
-                                                 self._property_map,
-                                                 self._property_map)
+            old_pertmol = old_system[0]
+            new_pertmol = new_system[0]
 
-            # Update the box information in the original system.
-            if "space" in new_system._sire_object.propertyKeys():
-                box = new_system._sire_object.property("space")
-                old_system._sire_object.setProperty(self._property_map.get("space", "space"), box)
+            old_system.removeMolecules(old_pertmol)
+            new_system.removeMolecules(new_pertmol)
 
-            return old_system
+            pertmol = self._updateCoordinates(old_pertmol.toSystem(), new_pertmol.toSystem())
+
+            rest_of_the_system = None
+            if old_system.nMolecules():
+                with _tempfile.TemporaryDirectory() as tempdir:
+                    base = _Path(tempdir)
+                    _IO.saveMolecules(f"{base}/temp", old_system, "prm7")
+                    _IO.saveMolecules(f"{base}/temp", new_system, "rst7")
+                    rest_of_the_system = _IO.readMolecules([f"{base}/temp.rst7", f"{base}/temp.prm7"])
+
+            new_system = _fastSystemInit(pertmol, rest_of_the_system)
+            for prop in old_system._sire_object.propertyKeys():
+                val = old_system._sire_object.property(prop)
+                new_system._sire_object.setProperty(prop, val)
+
+            return new_system
 
         except:
             return None

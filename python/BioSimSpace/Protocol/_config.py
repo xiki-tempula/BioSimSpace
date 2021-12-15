@@ -151,7 +151,7 @@ class ConfigFactory:
         mols0 = [squashed_system.getMolecule(i) for i, mask in enumerate(perturbable_mol_mask) if mask == 0]
         mols1 = [squashed_system.getMolecule(i) for i, mask in enumerate(perturbable_mol_mask) if mask == 1]
 
-        # Find the perturbed atom indices withing the squashed system.
+        # Find the perturbed atom indices within the squashed system.
         mols0_indices = [squashed_system.getIndex(atom) + 1 for mol in mols0 for atom in mol.getAtoms()]
         mols1_indices = [squashed_system.getIndex(atom) + 1 for mol in mols1 for atom in mol.getAtoms()]
 
