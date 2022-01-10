@@ -29,6 +29,9 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["System"]
 
+import os as _os
+import uuid as _uuid
+
 from Sire import IO as _SireIO
 from Sire import Maths as _SireMaths
 from Sire import Mol as _SireMol
@@ -40,6 +43,7 @@ from BioSimSpace import _isVerbose
 from BioSimSpace._Exceptions import IncompatibleError as _IncompatibleError
 from BioSimSpace.Types import Angle as _Angle
 from BioSimSpace.Types import Length as _Length
+from BioSimSpace import Stream as _Stream
 from BioSimSpace import Units as _Units
 
 from ._sire_wrapper import SireWrapper as _SireWrapper
@@ -216,6 +220,22 @@ class System(_SireWrapper):
     def __setitem__(self, key, value):
         """Set a molecule in the container."""
         raise TypeError("'System' object does not support assignment.")
+
+    def __getstate__(self):
+        filebase = _uuid.uuid4().hex
+        _Stream.save(self, filebase)
+        contents = open(filebase + ".s3", "rb").read()
+        _os.remove(filebase + ".s3")
+        return contents
+
+    def __setstate__(self, state):
+        filename = _uuid.uuid4().hex + ".s3"
+        with open(filename, "wb") as file:
+            file.write(state)
+        system = _Stream.load(filename)
+        _os.remove(filename)
+        self._sire_object = system._sire_object
+        self._reset_mappings()
 
     def __iter__(self):
         """An iterator for the object."""
