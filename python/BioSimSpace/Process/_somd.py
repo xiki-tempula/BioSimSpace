@@ -29,7 +29,6 @@ __email__ = "lester.hedges@gmail.com"
 __all__ = ["Somd"]
 
 import os as _os
-_pygtail = _try_import("pygtail")
 import random as _random
 import string as _string
 import sys as _sys
@@ -53,6 +52,8 @@ from BioSimSpace import IO as _IO
 from BioSimSpace import Protocol as _Protocol
 from BioSimSpace import Trajectory as _Trajectory
 from BioSimSpace import _Utils
+
+_pygtail = _try_import("pygtail")
 
 from . import _process
 
@@ -417,9 +418,7 @@ class Somd(_process.Process):
             # coordinates back into the original system.
             old_system = self._system.copy()
 
-            old_system = self._updateCoordinatesAndVelocities(old_system,
-                                                              new_system,
-                                                              self._property_map,
+            old_system = self._updateCoordinatesAndVelocities(old_system, new_system, self._property_map,
                                                               self._property_map)
 
             # Update the box information in the original system.
@@ -507,9 +506,7 @@ class Somd(_process.Process):
 
             # Copy the new coordinates back into the original system.
             old_system = self._system.copy()
-            old_system._updateCoordinates(new_system,
-                                          self._property_map,
-                                          self._property_map)
+            old_system._updateCoordinatesAndVelocities(new_system, self._property_map, self._property_map)
 
             # Update the box information in the original system.
             if "space" in new_system._sire_object.propertyKeys():

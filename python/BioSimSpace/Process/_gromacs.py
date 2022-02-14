@@ -2004,9 +2004,7 @@ class Gromacs(_process.Process):
 
                 # Copy the old system and update the coordinates.
                 old_system = self._system.copy()
-                old_system._updateCoordinatesAndVelocities(new_system,
-                                                           self._property_map,
-                                                           self._property_map)
+                old_system._updateCoordinatesAndVelocities(new_system, self._property_map, self._property_map)
 
                 # Update the box information in the original system.
                 try:

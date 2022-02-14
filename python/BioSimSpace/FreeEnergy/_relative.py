@@ -44,7 +44,7 @@ import zipfile as _zipfile
 
 import numpy as _np
 from simtk import unit as _unit
-from simtk.unit.constants import MOLAR_GAS_CONSTANT_R as _MOLAR_GAS_CONSTANT_R
+from openmm.unit.constants import MOLAR_GAS_CONSTANT_R as _MOLAR_GAS_CONSTANT_R
 import pymbar as _pymbar
 
 from Sire.Base import getBinDir as _getBinDir
@@ -420,7 +420,7 @@ class Relative():
         function_glob_dict = {
             "SOMD": (Relative._analyse_somd, "/lambda_*/gradients.dat"),
             "GROMACS": (Relative._analyse_gromacs, "/lambda_*/gromacs.xvg"),
-            "AMBER": (Relative._analyse_amber, "/lambda_*/amber.log")
+            "AMBER": (Relative._analyse_amber, "/lambda_*/amber.out")
         }
 
         for engine, (func, mask) in function_glob_dict.items():
@@ -475,7 +475,7 @@ class Relative():
         if not _os.path.isdir(work_dir):
             raise ValueError("'work_dir' doesn't exist!")
 
-        files = _glob(work_dir + "/lambda_*/amber.log")
+        files = _glob(work_dir + "/lambda_*/amber.out")
         energy_dict = {}
         sample_dict = {}
         lambdas = [float(x.split("/")[-2].split("_")[-1]) for x in files]

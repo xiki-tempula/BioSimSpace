@@ -502,9 +502,7 @@ class Amber(_process.Process):
             if isinstance(self._protocol, _Protocol._FreeEnergyMixin):
                 # Read the coordinates into the squashed system.
                 old_system_squashed = _squash(old_system)
-                old_system_squashed._updateCoordinates(new_system,
-                                                       self._property_map,
-                                                       self._property_map)
+                old_system_squashed._updateCoordinatesAndVelocities(new_system, self._property_map, self._property_map)
 
                 # Even though the two molecules should have the same coordinates, they might be PBC wrapped differently.
                 # Here we take the first common core atom and translate the second molecule.
@@ -583,9 +581,7 @@ class Amber(_process.Process):
                         mol_idx += 2
                 old_system = _System(molecules)
             else:
-                old_system._updateCoordinates(new_system,
-                                              self._property_map,
-                                              self._property_map)
+                old_system._updateCoordinatesAndVelocities(new_system, self._property_map, self._property_map)
 
             # Update the box information in the original system.
             if "space" in new_system._sire_object.propertyKeys():
@@ -672,9 +668,7 @@ class Amber(_process.Process):
 
             # Copy the new coordinates back into the original system.
             old_system = self._system.copy()
-            old_system._updateCoordinates(new_system,
-                                          self._property_map,
-                                          self._property_map)
+            old_system._updateCoordinatesAndVelocities(new_system, self._property_map, self._property_map)
 
             # Update the box information in the original system.
             if "space" in new_system._sire_object.propertyKeys():
