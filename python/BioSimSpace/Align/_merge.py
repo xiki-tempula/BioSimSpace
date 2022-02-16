@@ -37,6 +37,8 @@ from Sire import Units as _SireUnits
 from BioSimSpace._Exceptions import IncompatibleError as _IncompatibleError
 from BioSimSpace._SireWrappers import Molecule as _Molecule
 from BioSimSpace._SireWrappers import System as _System
+from BioSimSpace._SireWrappers._fast_system import _fastSystemInit
+
 
 def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
         allow_ring_size_change=False, force=False,
@@ -1272,7 +1274,7 @@ def _squash(system):
             all_molecules += [_removeDummies(molecule, False), _removeDummies(molecule, True)]
 
     # Copy all the properties from the old system.
-    new_system = _System(all_molecules)
+    new_system = _fastSystemInit(all_molecules)
     for prop in system._sire_object.propertyKeys():
         val = system._sire_object.property(prop)
         new_system._sire_object.setProperty(prop, val)

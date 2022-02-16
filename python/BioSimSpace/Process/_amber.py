@@ -29,6 +29,7 @@ __email__ = "lester.hedges@gmail.com"
 __all__ = ["Amber"]
 
 from BioSimSpace._Utils import _try_import, _have_imported
+from .._SireWrappers._fast_system import _fastSystemInit
 
 _watchdog = _try_import("watchdog")
 
@@ -579,7 +580,7 @@ class Amber(_process.Process):
                         molecule._sire_object = editor.commit()
                         molecules.append(molecule)
                         mol_idx += 2
-                old_system = _System(molecules)
+                old_system = _fastSystemInit(molecules)
             else:
                 old_system._updateCoordinatesAndVelocities(new_system, self._property_map, self._property_map)
 
