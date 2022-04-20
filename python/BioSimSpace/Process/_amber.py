@@ -29,6 +29,7 @@ __email__ = "lester.hedges@gmail.com"
 __all__ = ["Amber"]
 
 from BioSimSpace._Utils import _try_import, _have_imported
+from .._SireWrappers._fast_system import _fastSystemInit
 
 _watchdog = _try_import("watchdog")
 
@@ -268,6 +269,9 @@ class Amber(_process.Process):
             system = _squash(system)
         else:
             system = self._checkPerturbable(system)
+
+        # Initialise the molecule index mapping based on the transformed system/
+        self._mapping = {_SireMol.MolIdx(x) : _SireMol.MolIdx(x) for x in range(0, system.nMolecules())}
 
         # RST file (coordinates).
         try:
@@ -665,7 +669,7 @@ class Amber(_process.Process):
                         molecule._sire_object = editor.commit()
                         molecules.append(molecule)
                         mol_idx += 2
-                old_system = _System(molecules)
+                old_system = _fastSystemInit(molecules)
             else:
                 # Update the coordinates and velocities and return a mapping between
                 # the molecule indices in the two systems.
