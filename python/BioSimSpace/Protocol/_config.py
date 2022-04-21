@@ -227,7 +227,7 @@ class ConfigFactory:
 
         # Define some miscellaneous defaults.
         protocol_dict = {
-            "ntpr": self._report_interval,          # Interval between reporting energies.
+            "ntpr": 200,                            # Interval between reporting energies.
             "ntwr": self._restart_interval,         # Interval between saving restart files.
             "ntwx": self._restart_interval,         # Trajectory sampling frequency.
             "ntxo": 2,                              # Output coordinates as NetCDF.
@@ -327,7 +327,7 @@ class ConfigFactory:
                     protocol_dict["ntp"] = 1        # Isotropic pressure scaling.
                     protocol_dict["pres0"] = f"{self.protocol.getPressure().bar().value():.5f}"  # Pressure in bar.
                     if isinstance(self.protocol, _Protocol.Equilibration):
-                        protocol_dict["barostat"] = 2         # Monte Carlo barostat.
+                        protocol_dict["barostat"] = 1         # Berendsen barostat.
                     else:
                         protocol_dict["barostat"] = 2         # Monte Carlo barostat.
                 else:
@@ -506,8 +506,8 @@ class ConfigFactory:
             lam = self.protocol.getLambda()
             idx = self.protocol.getLambdaValues().index(lam)
             protocol_dict["init-lambda-state"] = idx                                # Current lambda value.
-            protocol_dict["nstcalcenergy"] = self._report_interval                  # Calculate energies every report interval steps.
-            protocol_dict["nstdhdl"] = self._report_interval                        # Write gradients every report interval steps.
+            protocol_dict["nstcalcenergy"] = 200                                    # Calculate energies every 200 steps.
+            protocol_dict["nstdhdl"] = 200                                          # Write gradients every 200 steps.
 
         # Put everything together in a line-by-line format.
         total_dict = {**protocol_dict, **extra_options}
@@ -558,11 +558,11 @@ class ConfigFactory:
                 report_interval = int(200 * _math.ceil(report_interval / 200))
                 restart_interval = int(200 * _math.ceil(restart_interval / 200))
 
-            # The number of moves per cycle - want about 1 cycle per 1 ns.
-            nmoves = int(max(1, ((self._steps) // ((self.protocol.getRunTime())/(1*_nanosecond))))
-)
+            # The number of moves per cycle.
+            nmoves = report_interval
+
             # The number of cycles, so that nmoves * ncycles is equal to self._steps.
-            ncycles = int(max(1, self._steps // nmoves))
+            ncycles = max(1, self._steps // nmoves)
 
             # How many cycles need to pass before we write a trajectory frame.
             cycles_per_frame = max(1, restart_interval // nmoves)
@@ -614,12 +614,6 @@ class ConfigFactory:
                 raise _IncompatibleError("SOMD only supports constant temperature equilibration.")
 
             protocol_dict["thermostat"] = "True"                                # Turn on the thermostat.
-            
-            if protocol_dict["integrator_type"] == "langevinmiddle" :         
-                protocol_dict["thermostat"] = "False"                           # Turn off the thermostat for langevin middle integrator.
-            else:
-                pass
-
             if not isinstance(self.protocol, _Protocol.Equilibration):
                 protocol_dict["temperature"] = "%.2f kelvin" % self.protocol.getTemperature().kelvin().value()
             else:
@@ -629,16 +623,12 @@ class ConfigFactory:
         if isinstance(self.protocol, _Protocol._FreeEnergyMixin):
             if not isinstance(self.protocol, _Protocol.Minimisation):
                 protocol_dict["constraint"] = "hbonds-notperturbed"             # Handle hydrogen perturbations.
-                protocol_dict["energy frequency"] = self._report_interval       # Write gradients every report interval steps.
+                protocol_dict["energy frequency"] = 200                         # Write gradients every 200 steps.
 
             protocol = [str(x) for x in self.protocol.getLambdaValues()]
             protocol_dict["lambda array"] = ", ".join(protocol)
             protocol_dict["lambda_val"] = self.protocol.getLambda()             # Current lambda value.
-            #protocol_dict["minimise"] = True                                   # minimise at each window
-            # Find the ligand, which will have the name LIG if created using BSS.
-            lig_res_num = self.system.search(f"resname LIG")[0]._sire_object.number().value()
-            protocol_dict["perturbed residue number"] = lig_res_num
-        
+
         # Put everything together in a line-by-line format.
         total_dict = {**protocol_dict, **extra_options}
         total_lines = [f"{k} = {v}" for k, v in total_dict.items() if v is not None] + extra_lines
