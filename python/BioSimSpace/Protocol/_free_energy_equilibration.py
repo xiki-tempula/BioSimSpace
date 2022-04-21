@@ -1,6 +1,7 @@
 __all__ = ["FreeEnergyEquilibration"]
 
 from BioSimSpace import Types as _Types
+from BioSimSpace import Units as _Units
 
 from ._free_energy_mixin import _FreeEnergyMixin
 from ._equilibration import Equilibration as _Equilibration
@@ -24,7 +25,7 @@ class FreeEnergyEquilibration(_Equilibration, _FreeEnergyMixin):
                  report_interval=200,
                  restart_interval=1000,
                  restraint=None,
-                 restrain_backbone=False,
+                 force_constant=10 * _Units.Energy.kcal_per_mol / _Units.Area.angstrom2,
                  restart=False,
                  perturbation_type="full"
                 ):
@@ -91,9 +92,10 @@ class FreeEnergyEquilibration(_Equilibration, _FreeEnergyMixin):
                Alternatively, the user can pass a list of atom indices for
                more fine-grained control. If None, then no restraints are used.
 
-           restrain_backbone : bool
-               Restraint atoms in the protein backbone. This option is now
-               deprecated. Please use restraint = "backbone" instead.
+           force_constant : :class:`GeneralUnit <BioSimSpace.Types._GeneralUnit>`, float
+               The force constant for the restraint potential. If a 'float' is
+               passed, then default units of 'kcal_per_mol / angstrom**2' will
+               be used.
 
            restart : bool
                Whether this is a continuation of a previous simulation.
@@ -122,7 +124,7 @@ class FreeEnergyEquilibration(_Equilibration, _FreeEnergyMixin):
                                 report_interval=report_interval,
                                 restart_interval=restart_interval,
                                 restraint=restraint,
-                                restrain_backbone=restrain_backbone,
+                                force_constant=force_constant,
                                 restart=restart)
 
         _FreeEnergyMixin.__init__(self,
@@ -140,19 +142,19 @@ class FreeEnergyEquilibration(_Equilibration, _FreeEnergyMixin):
         else:
             return ("<BioSimSpace.Protocol.FreeEnergyEquilibration: lam=%5.4f, lam_vals=%r, timestep=%s, "
                     "runtime=%s, temperature_start=%s, temperature_end=%s, pressure=%s, report_interval=%d, "
-                    "restart_interval=%d, restart_interval=%d,restraint=%r, restart=%r>"
+                    "restart_interval=%d, restart_interval=%d,restraint=%r, restart=%r, force_constant=%3.2f>"
                     ) % (self._lambda, self._lambda_vals, self._timestep, self._runtime,
                          self._temperature_start, self._temperature_end, self._pressure, self._report_interval,
-                         self._restart_interval, self._restraint, self._restart)
+                         self._restart_interval, self._restraint, self._restart, self._force_constant.value())
 
     def __repr__(self):
         """Return a string showing how to instantiate the object."""
         if self._is_customised:
             return "<BioSimSpace.Protocol.Custom>"
         else:
-            return ("<BioSimSpace.Protocol.FreeEnergyEquilibration: lam=%5.4f, lam_vals=%r, timestep=%s, "
+            return ("<BioSimSpace.Protocol.FreeEnergyEquilibration(lam=%5.4f, lam_vals=%r, timestep=%s, "
                     "runtime=%s, temperature_start=%s, temperature_end=%s, pressure=%s, report_interval=%d, "
-                    "restart_interval=%d, restart_interval=%d,restraint=%r, restart=%r>"
+                    "restart_interval=%d, restart_interval=%d,restraint=%r, restart=%r, force_constant=%3.2f)>"
                     ) % (self._lambda, self._lambda_vals, self._timestep, self._runtime,
                          self._temperature_start, self._temperature_end, self._pressure, self._report_interval,
-                         self._restart_interval, self._restraint, self._restart)
+                         self._restart_interval, self._restraint, self._restart, self._force_constant.value())

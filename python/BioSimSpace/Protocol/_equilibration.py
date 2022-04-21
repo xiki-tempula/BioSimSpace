@@ -173,7 +173,7 @@ class Equilibration(_Protocol):
         else:
             return ("<BioSimSpace.Protocol.Equilibration: timestep=%s, runtime=%s, "
                     "temperature_start=%s, temperature_end=%s, pressure=%s, "
-                    "report_interval=%d, restart_interval=%d,restraint=%r, restart=%r>"
+                    "report_interval=%d, restart_interval=%d,restraint=%r, restart=%r,"
                     "force_constant=%3.2f kcal_per_mol/angstrom**2>"
                    ) % (self._timestep, self._runtime, self._temperature_start, self._temperature_end,
                            self._pressure, self._report_interval, self._restart_interval, self._restraint,
@@ -186,8 +186,8 @@ class Equilibration(_Protocol):
         else:
             return ("<BioSimSpace.Protocol.Equilibration(timestep=%s, runtime=%s, "
                     "temperature_start=%s, temperature_end=%s, pressure=%s, "
-                    "report_interval=%d, restart_interval=%d,restraint=%r, restart=%r>"
-                    "force_constant=%3.2f)"
+                    "report_interval=%d, restart_interval=%d,restraint=%r, restart=%r,"
+                    "force_constant=%3.2f)>"
                     ) % (self._timestep, self._runtime, self._temperature_start, self._temperature_end,
                          self._pressure, self._report_interval, self._restart_interval, self._restraint,
                          self._restart, self._force_constant.value())
