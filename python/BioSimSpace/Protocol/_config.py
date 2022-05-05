@@ -2,6 +2,8 @@ import itertools as _it
 import math as _math
 import warnings as _warnings
 
+from Sire import Units as _SireUnits
+
 from BioSimSpace.Align._merge import _squash
 from BioSimSpace._Exceptions import IncompatibleError as _IncompatibleError
 from BioSimSpace.Units.Time import nanosecond as _nanosecond
@@ -312,7 +314,9 @@ class ConfigFactory:
                             raise ValueError("AMBER atom 'restraintmask' exceeds 256 character limit!")
 
                     protocol_dict["ntr"] = 1
-                    protocol_dict["restraint_wt"] = 10
+                    force_constant = self.protocol.getForceConstant()._sire_unit
+                    force_constant = force_constant.to(_SireUnits.kcal_per_mol / _SireUnits.angstrom2)
+                    protocol_dict["restraint_wt"] = force_constant
                     protocol_dict["restraintmask"] = f"\"{restraint_mask}\""
 
         # Pressure control.
