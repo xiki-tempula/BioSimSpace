@@ -9,12 +9,8 @@ class TestGromacsRBFE():
     @staticmethod
     @pytest.fixture(scope='class')
     def system():
-        # Benzene.
-        m0 = BSS.Parameters.openff_unconstrained_2_0_0(
-            "c1ccccc1").getMolecule()
-        # Toluene.
-        m1 = BSS.Parameters.openff_unconstrained_2_0_0(
-            "Cc1ccccc1").getMolecule()
+        m0 = BSS.IO.readMolecules("test/input/ligands/CAT-13a*").getMolecule(0)
+        m1 = BSS.IO.readMolecules("test/input/ligands/CAT-13c*").getMolecule(0)
         atom_mapping = BSS.Align.matchAtoms(m0, m1)
         m0 = BSS.Align.rmsdAlign(m0, m1, atom_mapping)
         merged = BSS.Align.merge(m0, m1)
@@ -32,7 +28,7 @@ class TestGromacsRBFE():
         freenrg = BSS.FreeEnergy.Relative(system, protocol, engine='GROMACS', )
         with open(f"{freenrg._work_dir}/lambda_6/gromacs.mdp", 'r') as f:
             mdp_text = f.read()
-            assert 'fep-lambdas = 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0' in mdp_text
+            assert 'fep-lambdas          = 0.00000 0.10000 0.20000 0.30000 0.40000 0.50000 0.60000 0.70000 0.80000 0.90000 1.00000' in mdp_text
             assert 'init-lambda-state = 6' in mdp_text
 
     def test_fep_df(self, system):
@@ -48,7 +44,7 @@ class TestGromacsRBFE():
         freenrg = BSS.FreeEnergy.Relative(system, protocol, engine='GROMACS', )
         with open(f"{freenrg._work_dir}/lambda_6/gromacs.mdp", 'r') as f:
             mdp_text = f.read()
-            assert 'fep-lambdas = 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0' in mdp_text
+            assert 'fep-lambdas          = 0.00000 0.10000 0.20000 0.30000 0.40000 0.50000 0.60000 0.70000 0.80000 0.90000 1.00000' in mdp_text
             assert 'init-lambda-state = 6' in mdp_text
 
     def test_staged_fep_df(self, system):
@@ -63,9 +59,9 @@ class TestGromacsRBFE():
         freenrg = BSS.FreeEnergy.Relative(system, protocol, engine='GROMACS', )
         with open(f"{freenrg._work_dir}/lambda_6/gromacs.mdp", 'r') as f:
             mdp_text = f.read()
-            assert 'bonded-lambdas = 0.0 0.25 0.5 0.75 1.0 1.0 1.0' in mdp_text
-            assert 'coul-lambdas = 0.0 0.0 0.0 0.5 1.0 1.0 1.0' in mdp_text
-            assert 'vdw-lambdas = 0.0 0.0 0.0 0.0 0.0 0.5 1.0' in mdp_text
+            assert 'bonded-lambdas       = 0.00000 0.25000 0.50000 0.75000 1.00000 1.00000 1.00000' in mdp_text
+            assert 'coul-lambdas         = 0.00000 0.00000 0.00000 0.50000 1.00000 1.00000 1.00000' in mdp_text
+            assert 'vdw-lambdas          = 0.00000 0.00000 0.00000 0.00000 0.00000 0.50000 1.00000' in mdp_text
             assert 'init-lambda-state = 6' in mdp_text
 
 class TestGromacsABFE():
@@ -87,8 +83,7 @@ class TestGromacsABFE():
     def test_decouple_vdw_q(self, system):
         m, protocol = system
         '''Test the decoupling where lambda0 = vdw-q and lambda1=none'''
-        mol = decouple(m, property_map0={"charge": True, "LJ": True},
-                       property_map1={"charge": False, "LJ": False})
+        mol = decouple(m)
         freenrg = BSS.FreeEnergy.Relative(mol.toSystem(), protocol, engine='GROMACS', )
         with open(f"{freenrg._work_dir}/lambda_6/gromacs.mdp", 'r') as f:
             mdp_text = f.read()
@@ -100,9 +95,7 @@ class TestGromacsABFE():
     def test_annihilate_vdw2q(self, system):
         '''Test the annihilation where lambda0 = vdw-q and lambda1=none'''
         m, protocol = system
-        mol = decouple(m,
-                       property_map0={"charge": False, "LJ": True},
-                       property_map1={"charge": True, "LJ": False},
+        mol = decouple(m, charge=(False, True), LJ=(True, False),
                        intramol=False)
         freenrg = BSS.FreeEnergy.Relative(mol.toSystem(), protocol, engine='GROMACS', )
         with open(f"{freenrg._work_dir}/lambda_6/gromacs.mdp", 'r') as f:
@@ -111,3 +104,16 @@ class TestGromacsABFE():
             assert 'couple-lambda0 = vdw' in mdp_text
             assert 'couple-lambda1 = q' in mdp_text
             assert 'couple-intramol = no' in mdp_text
+
+    def test_sc_parameters(self, system):
+        '''Test if the soft core parameters have been written.
+        The default sc-alpha is 0, which means the soft-core of the vdw is not
+        turned on by default. This checks if the this value has been changed to
+        0.5.'''
+        m, protocol = system
+        mol = decouple(m)
+        freenrg = BSS.FreeEnergy.Relative(mol.toSystem(), protocol, engine='GROMACS', )
+
+        with open(f"{freenrg._work_dir}/lambda_6/gromacs.mdp", 'r') as f:
+            mdp_text = f.read()
+            assert 'sc-alpha = 0.5' in mdp_text

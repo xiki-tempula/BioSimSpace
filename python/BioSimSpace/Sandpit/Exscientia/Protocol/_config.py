@@ -459,28 +459,30 @@ class ConfigFactory:
             protocol_dict["tc-grps"] = "system"                                     # A single temperature group for the entire system.
             protocol_dict["tau-t"] = 2                                              # Collision frequency (ps).
 
-            if not isinstance(self.protocol, _Protocol.Equilibration):
+            if isinstance(self.protocol, _Protocol.Equilibration):
+                if self.protocol.isConstantTemp():
+                    temp = "%.2f" % self.protocol.getStartTemperature().kelvin().value()
+                    protocol_dict["ref-t"] = temp
+                    protocol_dict["gen-vel"] = "yes"
+                    protocol_dict["gen-temp"] = temp
+                else:
+                    #still need a reference temperature for each group, even when heating/cooling
+                    protocol_dict["ref-t"] = "%.2f" % self.protocol.getEndTemperature().kelvin().value()
+                    # Work out the final time of the simulation.
+                    timestep = self.protocol.getTimeStep().picoseconds().value()
+                    end_time = _math.floor(timestep * self._steps)
+
+                    protocol_dict["annealing"] = "single"                               # Single sequence of annealing points.
+                    protocol_dict["annealing-npoints"] = 2                              # Two annealing points for "system" temperature group.
+
+                    # Linearly change temperature between start and end times.
+                    protocol_dict["annealing-time"] = "0 %d" % end_time
+                    protocol_dict["annealing-temp"] = "%.2f %.2f" % (
+                        self.protocol.getStartTemperature().kelvin().value(),
+                        self.protocol.getEndTemperature().kelvin().value(),
+                    )
+            else:
                 protocol_dict["ref-t"] = "%.2f" % self.protocol.getTemperature().kelvin().value()
-            elif self.protocol.isConstantTemp():
-                protocol_dict["ref-t"] = "%.2f" % self.protocol.getStartTemperature().kelvin().value()
-
-            # Heating/cooling protocol.
-            elif not self.protocol.isConstantTemp():
-                #still need a reference temperature for each group, even when heating/cooling
-                protocol_dict["ref-t"] = "%.2f" % self.protocol.getEndTemperature().kelvin().value()
-                # Work out the final time of the simulation.
-                timestep = self.protocol.getTimeStep().picoseconds().value()
-                end_time = _math.floor(timestep * self._steps)
-
-                protocol_dict["annealing"] = "single"                               # Single sequence of annealing points.
-                protocol_dict["annealing-npoints"] = 2                              # Two annealing points for "system" temperature group.
-
-                # Linearly change temperature between start and end times.
-                protocol_dict["annealing-time"] = "0 %d" % end_time
-                protocol_dict["annealing-temp"] = "%.2f %.2f" % (
-                    self.protocol.getStartTemperature().kelvin().value(),
-                    self.protocol.getEndTemperature().kelvin().value(),
-                )
 
         # Free energies.
         if isinstance(self.protocol, _Protocol._FreeEnergyMixin):
@@ -488,6 +490,7 @@ class ConfigFactory:
             nDecoupledMolecules = self.system.nDecoupledMolecules()
             if nDecoupledMolecules == 1:
                 [mol, ] = self.system.getDecoupledMolecules()
+                decouple_dict = mol._sire_object.property("decouple")
                 protocol_dict["couple-moltype"] = mol._sire_object.name().value()
                 def tranform(charge, LJ):
                     if charge and LJ:
@@ -499,18 +502,22 @@ class ConfigFactory:
                     else:
                         return 'none'
                 protocol_dict["couple-lambda0"] = tranform(
-                    mol._sire_object.property('charge0').value(),
-                    mol._sire_object.property('LJ0').value()
+                    decouple_dict["charge"][0],
+                    decouple_dict["LJ"][0]
                 )
                 protocol_dict["couple-lambda1"] = tranform(
-                    mol._sire_object.property('charge1').value(),
-                    mol._sire_object.property('LJ1').value()
+                    decouple_dict["charge"][1],
+                    decouple_dict["LJ"][1]
                 )
-                if mol._sire_object.property('annihilated').value():
-                    # No intramol interactions and thus annihilated.
-                    protocol_dict["couple-intramol"] = 'no'
-                else:
+                # Add the soft-core parameters for the ABFE
+                protocol_dict['sc-alpha'] = 0.5
+                protocol_dict['sc-power'] = 1
+                protocol_dict['sc-sigma'] = 0.3
+                if decouple_dict['intramol'].value():
+                    # The intramol is being coupled to the lambda change and thus being annihilated.
                     protocol_dict["couple-intramol"] = 'yes'
+                else:
+                    protocol_dict["couple-intramol"] = 'no'
             elif nDecoupledMolecules > 1:
                 raise ValueError('Gromacs cannot handle more than one decoupled molecule.')
             protocol_dict["calc-lambda-neighbors"] = -1                             # Calculate MBAR energies.
@@ -518,8 +525,8 @@ class ConfigFactory:
             for name in ['fep', 'bonded', 'coul', 'vdw', 'restraint', 'mass',
                            'temperature']:
                 if name in LambdaValues:
-                    protocol_dict["{}-lambdas".format(name)] = \
-                        ' '.join(list(map(str, LambdaValues[name].to_list())))
+                    protocol_dict['{:<20}'.format("{}-lambdas".format(name))] = \
+                        ' '.join(list(map('{:.5f}'.format, LambdaValues[name].to_list())))
             protocol_dict["init-lambda-state"] = self.protocol.getLambdaIndex()     # Current lambda value.
             protocol_dict["nstcalcenergy"] = 200                                    # Calculate energies every 200 steps.
             protocol_dict["nstdhdl"] = 200                                          # Write gradients every 200 steps.
@@ -643,6 +650,8 @@ class ConfigFactory:
             protocol = [str(x) for x in self.protocol.getLambdaValues()]
             protocol_dict["lambda array"] = ", ".join(protocol)
             protocol_dict["lambda_val"] = self.protocol.getLambda()             # Current lambda value.
+            res_num = self.system.search("perturbable")[0]._sire_object.number().value()
+            protocol_dict["perturbed residue number"] = res_num                 # Perturbed residue number.
 
         # Put everything together in a line-by-line format.
         total_dict = {**protocol_dict, **extra_options}
