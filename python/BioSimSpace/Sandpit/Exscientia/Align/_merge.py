@@ -1256,7 +1256,20 @@ def _removeDummies(molecule, is_lambda1):
 
 def _squash(system):
     """Internal function which converts a merged BioSimSpace system into an AMBER-compatible format, where all perturbed
-       molecules are represented sequentially, instead of in a mixed topology, like in GROMACS.
+       molecules are represented sequentially, instead of in a mixed topology, like in GROMACS. In the current
+       implementation, all perturbed molecules are moved at the end of the squashed system. For example, if we have an
+       input system, containing regular molecules (M) and perturbed molecules (P):
+
+       M0 - M1 - P0 - M2 - P1 - M3
+
+       This function will return the following squashed system:
+
+       M0 - M1 - M2 - M3 - P0_A - PO_B - P1_A - P1_B
+
+       Where A and B denote the dummyless lambda=0 and lambda=1 states. In addition, we also
+       return a mapping between the old unperturbed molecule indices and the new ones. This
+       mapping can be used during coordinate update. Updating the coordinates of the perturbed
+       molecules, however, has to be done manually through the Python layer.
 
        Parameters
        ----------
@@ -1293,6 +1306,8 @@ def _squash(system):
 def _unsquash(system, squashed_system, mapping):
     """Internal function which converts an alchemical AMBER system where the perturbed molecules are
        defined sequentially and updates the coordinates and velocities of an input unsquashed system.
+       Refer to the _squash() function documentation to see the structure of the squashed system
+       relative to the unsquashed one.
 
        Parameters
        ----------

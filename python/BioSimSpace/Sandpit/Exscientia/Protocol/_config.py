@@ -109,6 +109,7 @@ class ConfigFactory:
         # separate contiguous blocks of indices, e.g. 1-23,34-47,...
 
         if atom_idxs:
+            # AMBER masks are 1-indexed, while BioSimSpace indices are 0-indexed.
             atom_idxs = [x + 1 for x in sorted(list(set(atom_idxs)))]
             if not all(isinstance(x, int) for x in atom_idxs):
                 raise TypeError("'atom_idxs' must be a list of 'int' types.")
