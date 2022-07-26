@@ -1316,6 +1316,7 @@ def _unsquash(system, squashed_system, mapping):
             squashed_system._sire_object,
             mapping)
 
+    # From now on we handle all perturbed molecules.
     squashed_pertmols = squashed_system[len(mapping):]
     assert len(squashed_pertmols) == 2 * new_system.nPerturbableMolecules(), "Incompatible squashed and unsquashed new_system"
 
@@ -1325,7 +1326,7 @@ def _unsquash(system, squashed_system, mapping):
         mol1 = squashed_pertmols[2 * i + 1]
 
         # Determine whether we should update velocities as well
-        update_velocity = "velocity" in mol1._sire_object.propertyKeys()
+        update_velocity = mol1._sire_object.hasProperty("velocity")
 
         # Even though the two molecules should have the same coordinates, they might be PBC wrapped differently.
         # Here we take the first common core atom and translate the second molecule.
