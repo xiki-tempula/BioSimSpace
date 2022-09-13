@@ -1184,7 +1184,7 @@ def flexAlign(molecule0, molecule1, mapping=None, fkcombu_exe=None,
     return _Molecule(molecule0)
 
 def merge(molecule0, molecule1, mapping=None, allow_ring_breaking=False,
-        allow_ring_size_change=False, force=False, roi=None, mut_idx=None,
+        allow_ring_size_change=False, force=False, roi=None,
         property_map0={}, property_map1={}):
     """Create a merged molecule from 'molecule0' and 'molecule1' based on the
        atom index 'mapping'. The merged molecule can be used in single topology
@@ -1219,10 +1219,7 @@ def merge(molecule0, molecule1, mapping=None, allow_ring_breaking=False,
            'allow_ring_size_change'.
         
        roi : list
-           The region of interest to merge. Consist of two lists of atom indices. 
-        
-       mut_idx : int
-           The index of residue to be mutated. 
+           The region of interest to merge. Consist of two lists of atom indices.
 
        property_map0 : dict
            A dictionary that maps "properties" in molecule0 to their user
@@ -1282,13 +1279,6 @@ def merge(molecule0, molecule1, mapping=None, allow_ring_breaking=False,
             raise TypeError("'roi' must be of type 'list'.")
         else:
             _validate_roi(molecule0, molecule1, roi)
-    
-    if mut_idx is not None:
-        if type(mut_idx) is not int:
-            raise TypeError("'mut_idx' must be of type 'int'.")
-        elif mut_idx >= len(molecule0.getResidues()) or mut_idx >= len(molecule1.getResidues()):
-            raise IndexError("'mut_idx' must be within range of number of residues")
-            
 
     # The user has passed an atom mapping.
     if mapping is not None:
@@ -1309,7 +1299,7 @@ def merge(molecule0, molecule1, mapping=None, allow_ring_breaking=False,
 
     # Create and return the merged molecule.
     return _merge(molecule0, molecule1, sire_mapping, allow_ring_breaking=allow_ring_breaking,
-            allow_ring_size_change=allow_ring_size_change, force=force, roi=roi, mut_idx=mut_idx,
+            allow_ring_size_change=allow_ring_size_change, force=force, roi=roi,
             property_map0=property_map0, property_map1=property_map1)
 
 def viewMapping(molecule0, molecule1, mapping=None, property_map0={},

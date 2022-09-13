@@ -39,7 +39,7 @@ from .._SireWrappers import Molecule as _Molecule
 
 
 def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
-        allow_ring_size_change=False, force=False, roi=None, mut_idx=None,
+        allow_ring_size_change=False, force=False, roi=None,
         property_map0={}, property_map1={}):
     """Merge this molecule with 'other'.
 
@@ -71,9 +71,6 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
 		roi : list
 			The region of interest to merge. Consist of two lists of atom indices.  
 		
-		mut_idx : int
-			The index of mutated residue.
-
         property_map0 : dict
             A dictionary that maps "properties" in this molecule to their
             user defined values. This allows the user to refer to properties
@@ -215,36 +212,33 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
     # Create a new molecule to hold the merged molecule.
     molecule = _SireMol.Molecule("Merged_Molecule")
 	# Only part of the ligand is to be merged
-    if mut_idx is not None:
+    if roi is not None:
+        if molecule0.nResidues() != molecule1.nResidues():
+            raise ValueError("The two molecules need to have the same number of residues")
+
         num = 1
-        for idx, mol0_res in enumerate(molecule0.residues()):
+        mut_idx = 0
+        for idx, (mol0_res, mol1_res) in enumerate(zip(molecule0.residues(), molecule1.residues())):
             res = molecule.edit().add(_SireMol.ResNum(idx+1))
-            # Add a single residue called LIG
-            if idx == mut_idx:
-                res.rename(_SireMol.ResName("LIG"))
-            # Add the residues from mol0
-            else:
+            if mol0_res.name() == mol1_res.name():
                 res.rename(mol0_res.name())
+            else:
+                res.rename(_SireMol.ResName(f"MU{mut_idx}"))
+                mut_idx += 1
+
             cg = res.molecule().add(_SireMol.CGName(f'{idx}'))
             for atom in mol0_res.atoms():
                 added = cg.add(atom.name())
                 added.renumber(_SireMol.AtomNum(num))
                 added.reparent(_SireMol.ResIdx(idx))
                 num += 1
-            molecule = cg.molecule().commit()
-
-        # Now add all of the atoms from molecule1 that aren't mapped from molecule0
-        if atoms1:
-            res = molecule.edit().add(_SireMol.ResNum(idx+2))
-            # Add a new residue called DUM
-            res.rename(_SireMol.ResName("DUM"))
-            cg = res.molecule().add(_SireMol.CGName(f'{idx+1}'))
-            for atom in atoms1:
-                added = cg.add(atom.name())
-                added.renumber(_SireMol.AtomNum(num))
-                added.reparent(_SireMol.ResIdx(idx+1))
-                inv_mapping[atom.index()] = _SireMol.AtomIdx(num-1)
-                num += 1
+            for atom in mol1_res.atoms():
+                if atom.index() in atoms1_idx:
+                    added = cg.add(atom.name())
+                    added.renumber(_SireMol.AtomNum(num))
+                    added.reparent(_SireMol.ResIdx(idx))
+                    inv_mapping[atom.index()] = _SireMol.AtomIdx(num - 1)
+                    num += 1
             molecule = cg.molecule().commit()
     else:
         # Add a single residue called LIG.
@@ -858,7 +852,7 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
     # Check that the merge hasn't modified the connectivity.
 
     # The checking was blocked when merging a protein
-    if mut_idx is None:
+    if roi is None:
         # molecule0
         for x in range(0, molecule0.nAtoms()):
             # Convert to an AtomIdx.

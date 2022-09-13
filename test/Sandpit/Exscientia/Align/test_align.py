@@ -237,12 +237,11 @@ def test_roi_merge():
             coord_dict = dict(zip(mut0_idx, aligned_coordinates))
 
             mapping_recovered = recover_mapping(mut0_idx, mut1_idx, mapping_mut)
-            mut_idx = i
     mapping.update(mapping_recovered)
     update_coordinate(m0, coord_dict)
 
     # Create the merged molecule.
-    m2 = BSS.Align.merge(m0, m1, mapping=mapping, force=True, roi=[mut0_idx, mut1_idx], mut_idx=mut_idx)
+    m2 = BSS.Align.merge(m0, m1, mapping=mapping, force=True, roi=[mut0_idx, mut1_idx])
 
     # Store the number of atoms in m0.
     n0 = m0._sire_object.nAtoms()
