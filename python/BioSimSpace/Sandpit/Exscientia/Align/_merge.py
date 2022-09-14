@@ -221,14 +221,12 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
             raise ValueError("The two molecules need to have the same number of residues")
 
         num = 1
-        mut_idx = 0
         for idx, (mol0_res, mol1_res) in enumerate(zip(molecule0.residues(), molecule1.residues())):
             res = molecule.edit().add(_SireMol.ResNum(idx + 1))
             if mol0_res.name() == mol1_res.name():
                 res.rename(mol0_res.name())
             else:
-                res.rename(_SireMol.ResName(f"MU{mut_idx}"))
-                mut_idx += 1
+                res.rename(_SireMol.ResName(f"MUT"))
 
             cg = res.molecule().add(_SireMol.CGName(f'{idx}'))
             for atom in mol0_res.atoms():
@@ -814,10 +812,10 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
                     info0.atomIdx(improper.atom2()) in atoms0_idx or \
                     info0.atomIdx(improper.atom3()) in atoms0_idx:
                 # Extract the improper information.
-                atom0 = mol1_merged_mapping[info0.atomIdx(improper.atom0())]
-                atom1 = mol1_merged_mapping[info0.atomIdx(improper.atom1())]
-                atom2 = mol1_merged_mapping[info0.atomIdx(improper.atom2())]
-                atom3 = mol1_merged_mapping[info0.atomIdx(improper.atom3())]
+                atom0 = mol0_merged_mapping[info0.atomIdx(improper.atom0())]
+                atom1 = mol0_merged_mapping[info0.atomIdx(improper.atom1())]
+                atom2 = mol0_merged_mapping[info0.atomIdx(improper.atom2())]
+                atom3 = mol0_merged_mapping[info0.atomIdx(improper.atom3())]
                 exprn = improper.function()
 
                 # Set the new improper.
@@ -878,7 +876,7 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
                 idy_map = mol0_merged_mapping[idy]
 
                 # Was a ring opened/closed?
-                is_ring_broken = _is_ring_broken(c1, conn, idx, idy, idx_map, idy_map)
+                is_ring_broken = _is_ring_broken(c0, conn, idx, idy, idx_map, idy_map)
 
                 # A ring was broken and it is not allowed.
                 if is_ring_broken and not allow_ring_breaking:
@@ -887,7 +885,7 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
                                              "to 'True'.")
 
                 # Did a ring change size?
-                is_ring_size_change = _is_ring_size_changed(c1, conn, idx, idy, idx_map, idy_map)
+                is_ring_size_change = _is_ring_size_changed(c0, conn, idx, idy, idx_map, idy_map)
 
                 # A ring changed size and it is not allowed.
                 if not is_ring_broken and is_ring_size_change and not allow_ring_size_change:
@@ -898,7 +896,7 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
                                              "preferable.")
 
                 # The connectivity has changed.
-                if c1.connectionType(idx, idy) != conn.connectionType(idx_map, idy_map):
+                if c0.connectionType(idx, idy) != conn.connectionType(idx_map, idy_map):
 
                     # The connectivity changed for an unknown reason.
                     if not (is_ring_broken or is_ring_size_change) and not force:

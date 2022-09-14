@@ -214,7 +214,6 @@ def roi_merged_mol(roi_mol0, roi_mol1):
                 edit_mol = edit_mol.atom(AtomIdx(idx)).setProperty("coordinates", vec).molecule()
         mol._sire_object = edit_mol.commit()
 
-    roi_mol0 = roi_mol0.copy()
     mol0_res_name, mol0_res_idx = get_res_info(roi_mol0)
     mol1_res_name, mol1_res_idx = get_res_info(roi_mol1)
 
@@ -245,7 +244,7 @@ def roi_merged_mol(roi_mol0, roi_mol1):
     update_coordinate(roi_mol0, coord_dict)
 
     # Create the merged molecule.
-    merged_mol = BSS.Align.merge(roi_mol0, roi_mol1, mapping=mapping, force=True, roi=[mut0_idx, mut1_idx])
+    merged_mol = BSS.Align.merge(roi_mol0, roi_mol1, mapping=mapping, roi=[mut0_idx, mut1_idx])
 
     return merged_mol
 
