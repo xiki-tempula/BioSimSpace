@@ -959,14 +959,6 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
     # Create the CLJNBPairs matrices.
     ff = molecule0.property(ff0)
 
-    # Get the user defined "intrascale" property names.
-    prop0 = inv_property_map0.get("intrascale", "intrascale")
-    prop1 = inv_property_map1.get("intrascale", "intrascale")
-
-    # Get the "intrascale" property from the two molecules.
-    intrascale0 = molecule0.property(prop0)
-    intrascale1 = molecule1.property(prop1)
-
     if roi is None:
         clj_nb_pairs0 = _SireMM.CLJNBPairs(edit_mol.info(),
                                            _SireMM.CLJScaleFactor(0, 0))
@@ -1083,38 +1075,37 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
 
     # Perform a triangular loop over atoms from molecule0.
     for x in range(0, iterlen):
+        # Convert to an AtomIdx.
+        idx = iterrange[x]
+        idx = _SireMol.AtomIdx(idx)
+
+        # Map the index to its position in the merged molecule.
+        idx_map = mol0_merged_mapping[idx]
+
         for y in range(x + 1, iterlen):
-            idx = iterrange[x]
             idy = iterrange[y]
-            idx = mol0_merged_mapping[_SireMol.AtomIdx(idx)]
-            idy = mol0_merged_mapping[_SireMol.AtomIdx(idy)]
-            # Get the intrascale value.
-            intra = intrascale0.get(idx, idy)
+            # Convert to an AtomIdx.
+            idy = _SireMol.AtomIdx(idy)
 
-            # Set the value in the new matrix, overwriting existing value.
-            clj_nb_pairs0.set(idx, idy, intra)
+            # Map the index to its position in the merged molecule.
+            idy_map = mol0_merged_mapping[idy]
 
-            conn_type = conn1.connectionType(idx, idy)
-
+            conn_type = conn0.connectionType(idx_map, idy_map)
             # The atoms aren't bonded.
             if conn_type == 0:
                 clj_scale_factor = _SireMM.CLJScaleFactor(1, 1)
-                clj_nb_pairs1.set(idx, idy, clj_scale_factor)
+                clj_nb_pairs0.set(idx_map, idy_map, clj_scale_factor)
 
             # The atoms are part of a dihedral.
             elif conn_type == 4:
                 clj_scale_factor = _SireMM.CLJScaleFactor(ff.electrostatic14ScaleFactor(),
                                                           ff.vdw14ScaleFactor())
-                clj_nb_pairs1.set(idx, idy, clj_scale_factor)
+                clj_nb_pairs0.set(idx_map, idy_map, clj_scale_factor)
 
             # The atoms are bonded
             else:
                 clj_scale_factor = _SireMM.CLJScaleFactor(0, 0)
-                clj_nb_pairs1.set(idx, idy, clj_scale_factor)
-            # else:
-            #     # Only set if there is a non-zero value.
-            #     if not intra.coulomb() == 0:
-            #         clj_nb_pairs1.set(idx, idy, intra)
+                clj_nb_pairs0.set(idx_map, idy_map, clj_scale_factor)
 
     # Finally, copy the intrascale from molecule1 into clj_nb_pairs1.
     if roi is None:
@@ -1141,9 +1132,6 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
 
             # Map the index to its position in the merged molecule.
             idy = mol1_merged_mapping[idy]
-
-            # Get the intrascale value.
-            intra = intrascale1.get(_SireMol.AtomIdx(x), _SireMol.AtomIdx(y))
 
             conn_type = conn1.connectionType(idx, idy)
 
