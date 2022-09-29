@@ -228,7 +228,8 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
             if mol0_res.name() == mol1_res.name():
                 res.rename(mol0_res.name())
             else:
-                res.rename(_SireMol.ResName(f"MUT"))
+                resname = "MUT" if len(molecule0.residues()) > 1 else "LIG"
+                res.rename(_SireMol.ResName(resname))
 
             cg = res.molecule().add(_SireMol.CGName(f'{idx}'))
             for atom in mol0_res.atoms():
@@ -1443,26 +1444,20 @@ def _squash(system):
     # Remove the perturbable molecules from the system.
     new_system.removeMolecules(pert_mols)
 
+    # Add them back at the end of the system. This is generally faster than keeping their order the same.
     new_indices = list(range(system.nMolecules()))
     for pertmol_idx, pert_mol in zip(pertmol_idxs, pert_mols):
         new_indices.remove(pertmol_idx)
-        if pert_mol.nResidues() == 1:
-            # Extract the end states of the perturbable molecule and remove dummies.
-            lam0 = _removeDummies(pert_mol, False)
-            lam1 = _removeDummies(pert_mol, True)
+        new_indices.append(pertmol_idx)
+        new_system += _squash_molecule(pert_mol)
 
-            # Add the squashed perturbable molecule to the end of the new system.
-            new_system += (lam0 + lam1)
-        else:
-            new_system += _squash_multires(pert_mol)
-
-    # Create the mapping.
+    # Create the old molecule index to new molecule index mapping.
     mapping = {_SireMol.MolIdx(idx): _SireMol.MolIdx(i) for i, idx in enumerate(new_indices)}
 
     return new_system, mapping
 
 
-def _squash_multires(molecule):
+def _squash_molecule(molecule):
     # Generate the new mapping between the two dummy-free endpoint molecules
     mapping = {}
     roi0, roi1 = set(), set()
