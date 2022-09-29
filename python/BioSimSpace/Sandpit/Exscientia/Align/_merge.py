@@ -1477,8 +1477,10 @@ def _squash_multires(molecule):
             if not is_perturbed:
                 mapping[_SireMol.AtomIdx(i0)] = _SireMol.AtomIdx(i1)
             else:
-                roi0.add(i0)
-                roi1.add(i1)
+                if "du" not in type0:
+                    roi0.add(i0)
+                if "du" not in type1:
+                    roi1.add(i1)
             if "du" not in type0:
                 i0 += 1
             if "du" not in type1:
