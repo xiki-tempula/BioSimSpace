@@ -1611,13 +1611,36 @@ def _unsquash_molecule(molecule, squashed_molecule):
     return _Molecule(siremol.commit())
 
 
+def _squashed_molecule_mapping(system):
+    # TODO: incorporate into squash()
+    # TODO: MolIdx vs int?
+    # Get the perturbable molecules and their corresponding indices.
+    pertmol_idxs = [i for i, molecule in enumerate(system.getMolecules()) if molecule.isPerturbable()]
+
+    # Add them back at the end of the system. This is generally faster than keeping their order the same.
+    new_indices = list(range(system.nMolecules()))
+    for pertmol_idx in pertmol_idxs:
+        new_indices.remove(pertmol_idx)
+        new_indices.append(pertmol_idx)
+
+    # Create the old molecule index to new molecule index mapping.
+    mapping = {_SireMol.MolIdx(idx): _SireMol.MolIdx(i) for i, idx in enumerate(new_indices)}
+
+    return mapping
+
+
 def _squashed_atom_mapping(system, is_lambda1=False):
     if isinstance(system, _Molecule):
         return _squashed_atom_mapping(system.toSystem(), is_lambda1=is_lambda1)
 
+    molecule_mapping = _squashed_molecule_mapping(system)
+
     atom_mapping = {}
     atom_idx, squashed_atom_idx = 0, 0
-    for molecule in system:
+    for i in range(len(system)):
+        mol_idx = molecule_mapping[_SireMol.MolIdx(i)].value()
+        molecule = system[mol_idx]
+
         if not molecule.isPerturbable():
             atom_indices = _np.arange(atom_idx, atom_idx + molecule.nAtoms())
             squashed_atom_indices = _np.arange(squashed_atom_idx, squashed_atom_idx + molecule.nAtoms())
@@ -1634,15 +1657,21 @@ def _squashed_atom_mapping(system, is_lambda1=False):
                 natoms0 = ncommon + ndummy0
                 natoms1 = ncommon + ndummy1
 
-                if not is_lambda1:
-                    atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())[in_mol0]
-                    squashed_atom_indices = _np.arange(squashed_atom_idx, squashed_atom_idx + natoms0)
+                if ndummy0 == ndummy1 == 0:
+                    atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())
+                    squashed_atom_indices = _np.arange(squashed_atom_idx, squashed_atom_idx + residue.nAtoms())
+                    squashed_atom_idx += residue.nAtoms()
                 else:
-                    atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())[in_mol1]
-                    offset = squashed_atom_idx + natoms0
-                    squashed_atom_indices = _np.arange(offset, offset + natoms1)
+                    if not is_lambda1:
+                        atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())[in_mol0]
+                        squashed_atom_indices = _np.arange(squashed_atom_idx, squashed_atom_idx + natoms0)
+                    else:
+                        atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())[in_mol1]
+                        offset = squashed_atom_idx + natoms0
+                        squashed_atom_indices = _np.arange(offset, offset + natoms1)
+                    squashed_atom_idx += natoms0 + natoms1
                 atom_mapping.update(dict(zip(atom_indices, squashed_atom_indices)))
                 atom_idx += residue.nAtoms()
-                squashed_atom_idx += natoms0 + natoms1
 
-    return atom_mapping
+    # Convert from NumPy integers to Python integers.
+    return {int(k): int(v) for k, v in atom_mapping.items()}

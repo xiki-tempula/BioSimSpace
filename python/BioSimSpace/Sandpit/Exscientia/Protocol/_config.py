@@ -4,7 +4,7 @@ import warnings as _warnings
 
 from Sire import Units as _SireUnits
 
-from ..Align._merge import _squash
+from ..Align._merge import _squash, _squashed_atom_mapping
 from .._Exceptions import IncompatibleError as _IncompatibleError
 from ..Units.Time import nanosecond as _nanosecond
 
@@ -147,44 +147,35 @@ class ConfigFactory:
         if self.squashed_system is None:
             self.squashed_system, _ = _squash(self.system)
 
-        # Get the perturbed molecules and the corresponding squashed molecules.
-        pertmols = self.system.getPerturbableMolecules()
-        pertmol_offset = len(self.system) - len(pertmols)
-        squashed_pertmols = self.squashed_system[pertmol_offset:]
-        atom_offsets = [0] + list(_it.accumulate(mol.nAtoms() for mol in self.squashed_system.getMolecules()))
+        # Get the merged to squashed atom mapping of the whole system for both endpoints.
+        atom_mapping0 = _squashed_atom_mapping(self.system, is_lambda1=False)
+        atom_mapping1 = _squashed_atom_mapping(self.system, is_lambda1=True)
 
-        # Find the perturbed atom indices withing the squashed system.
-        mols0_indices, mols1_indices = [], []
-        dummy0_indices, dummy1_indices = [], []
-        for i, pertmol in enumerate(pertmols):
-            mol0 = squashed_pertmols[2 * i]
-            mol1 = squashed_pertmols[2 * i + 1]
-            atom_offset0 = atom_offsets[pertmol_offset + 2 * i]
-            atom_offset1 = atom_offset0 + mol0.nAtoms()
-            mols0_indices += list(range(atom_offset0, atom_offset1))
-            mols1_indices += list(range(atom_offset1, atom_offset1 + mol1.nAtoms()))
-            nondummy_indices0 = [atom.index() for atom in pertmol.getAtoms()
-                                 if "du" not in atom._sire_object.property("ambertype0")]
-            nondummy_indices1 = [atom.index() for atom in pertmol.getAtoms()
-                                 if "du" not in atom._sire_object.property("ambertype1")]
-            dummy0_indices += [atom_offset0 + nondummy_indices0.index(atom.index())
-                               for atom in pertmol.getAtoms()
-                               if "du" in atom._sire_object.property("ambertype1")]
-            dummy1_indices += [atom_offset1 + nondummy_indices1.index(atom.index())
-                               for atom in pertmol.getAtoms()
-                               if "du" in atom._sire_object.property("ambertype0")]
+        # Generate the ti and dummy masks.
+        mcs0_indices, mcs1_indices, dummy0_indices, dummy1_indices = [], [], [], []
+        for i in range(self.system.nAtoms()):
+            if i not in atom_mapping0:
+                dummy1_indices.append(atom_mapping1[i])
+            elif i not in atom_mapping1:
+                dummy0_indices.append(atom_mapping0[i])
+            # The TI region is defined by all different squashed atoms that are mapped to the same merged atom.
+            elif atom_mapping0[i] != atom_mapping1[i]:
+                mcs0_indices.append(atom_mapping0[i])
+                mcs1_indices.append(atom_mapping1[i])
+        ti0_indices = mcs0_indices + dummy0_indices
+        ti1_indices = mcs1_indices + dummy1_indices
 
         # Define whether HMR is used based on the timestep.
         # When HMR is used, there can be no SHAKE.
         if timestep >= 0.004:
             no_shake_mask = ""
         else:
-            no_shake_mask = self._amber_mask_from_indices(mols0_indices + mols1_indices)
+            no_shake_mask = self._amber_mask_from_indices(mcs0_indices + mcs1_indices)
 
         # Create an option dict with amber masks generated from the above indices.
         option_dict = {
-            "timask1": f"\"{self._amber_mask_from_indices(mols0_indices)}\"",
-            "timask2": f"\"{self._amber_mask_from_indices(mols1_indices)}\"",
+            "timask1": f"\"{self._amber_mask_from_indices(ti0_indices)}\"",
+            "timask2": f"\"{self._amber_mask_from_indices(ti1_indices)}\"",
             "scmask1": f"\"{self._amber_mask_from_indices(dummy0_indices)}\"",
             "scmask2": f"\"{self._amber_mask_from_indices(dummy1_indices)}\"",
             "noshakemask": f"\"{no_shake_mask}\"",
