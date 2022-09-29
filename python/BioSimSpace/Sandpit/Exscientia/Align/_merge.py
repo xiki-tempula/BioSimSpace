@@ -30,6 +30,7 @@ __all__ = ["merge"]
 
 import copy as _copy
 
+import numpy as _np
 from Sire import Base as _SireBase
 from Sire import IO as _SireIO
 from Sire import MM as _SireMM
@@ -1561,75 +1562,87 @@ def _unsquash(system, squashed_system, mapping):
     # Create a copy of the original new_system.
     new_system = system.copy()
 
-    # Update the coordinates in the original new_system using the mapping.
+    # Update the unperturbed molecule coordinates in the original new_system using the mapping.
     if mapping:
+        # Squash() puts all perturbable molecules at the end of the system so we prune them from the mapping now.
+        pertmol_offset = len(new_system) - new_system.nPerturbableMolecules()
+        nonpertmol_mapping = {k: v for k, v in mapping.items() if v.value() < pertmol_offset}
         new_system._sire_object, _ = _SireIO.updateCoordinatesAndVelocities(
             new_system._sire_object,
             squashed_system._sire_object,
-            mapping)
+            nonpertmol_mapping)
 
     # From now on we handle all perturbed molecules.
-    squashed_pertmols = squashed_system[len(mapping):]
-    assert len(
-        squashed_pertmols) == 2 * new_system.nPerturbableMolecules(), "Incompatible squashed and unsquashed new_system"
-
     pertmol_idxs = [i for i, molecule in enumerate(new_system.getMolecules()) if molecule.isPerturbable()]
-    for i, (pertmol_idx, pertmol) in enumerate(zip(pertmol_idxs, new_system.getPerturbableMolecules())):
-        mol0 = squashed_pertmols[2 * i]
-        mol1 = squashed_pertmols[2 * i + 1]
+    pertmols = new_system.getPerturbableMolecules()
+    squashed_pertmols = squashed_system[-new_system.nPerturbableMolecules():]
 
-        # Determine whether we should update velocities as well
-        update_velocity = mol1._sire_object.hasProperty("velocity")
-
-        # Even though the two molecules should have the same coordinates, they might be PBC wrapped differently.
-        # Here we take the first common core atom and translate the second molecule.
-        pertatom_idx0, pertatom_idx1 = 0, 0
-        for i, atom in enumerate(pertmol.getAtoms()):
-            is_dummy0 = "du" in atom._sire_object.property("ambertype0")
-            is_dummy1 = "du" in atom._sire_object.property("ambertype1")
-            if not is_dummy0 and not is_dummy1:
-                break
-            pertatom_idx0 += not is_dummy0
-            pertatom_idx1 += not is_dummy1
-        old_system_squashed_pertatom0 = mol0.getAtoms()[pertatom_idx0]
-        old_system_squashed_pertatom1 = mol1.getAtoms()[pertatom_idx1]
-        pertatom_coords0 = old_system_squashed_pertatom0._sire_object.property("coordinates")
-        pertatom_coords1 = old_system_squashed_pertatom1._sire_object.property("coordinates")
-        translation_vec = pertatom_coords1 - pertatom_coords0
-
-        # Extract the non-dummy atom coordinates and velocities from the squashed new_system.
-        atom_idx0, atom_idx1 = 0, 0
-        editor = pertmol._sire_object.edit()
-        for j in range(0, pertmol._sire_object.nAtoms()):
-            atom = editor.atom(_SireMol.AtomIdx(j))
-            coordinates, velocities = None, None
-            if "du" not in atom.property("ambertype0"):
-                new_atom = mol0.getAtoms()[atom_idx0]
-                coordinates = new_atom._sire_object.property("coordinates")
-                if update_velocity:
-                    velocities = new_atom._sire_object.property("velocity")
-                atom_idx0 += 1
-            if "du" not in atom.property("ambertype1"):
-                new_atom = mol1.getAtoms()[atom_idx1]
-                if coordinates is None:
-                    coordinates = new_atom._sire_object.property("coordinates") - translation_vec
-                if velocities is None and update_velocity:
-                    velocities = new_atom._sire_object.property("velocity")
-                atom_idx1 += 1
-
-            # Set the properties
-            if update_velocity:
-                atom.setProperty("velocity0", velocities)
-                atom.setProperty("velocity1", velocities)
-            atom.setProperty("coordinates0", coordinates)
-            editor = atom.setProperty("coordinates1", coordinates).molecule()
-
-        # Sanity checks
-        assert mol0.nAtoms() == atom_idx0, "Incompatible perturbed molecules"
-        assert mol1.nAtoms() == atom_idx1, "Incompatible perturbed molecules"
-
-        # Update the molecule and the new_system.
-        pertmol._sire_object = editor.commit()
-        new_system.updateMolecule(pertmol_idx, pertmol)
+    for i, pertmol, squashed_pertmol in zip(pertmol_idxs, pertmols, squashed_pertmols):
+        new_pertmol = _unsquash_molecule(pertmol, squashed_pertmol)
+        new_system.updateMolecule(i, new_pertmol)
 
     return new_system
+
+
+def _unsquash_molecule(molecule, squashed_molecule):
+    if molecule.nResidues() != squashed_molecule.nResidues():
+        raise ValueError("The number of residues between the squashed and unsquashed molecules does not match")
+
+    # Get the atom mapping and combine it with the lambda=0 molecule being prioritised
+    atom_mapping0 = _squashed_atom_mapping(molecule, is_lambda1=False)
+    atom_mapping1 = _squashed_atom_mapping(molecule, is_lambda1=True)
+    atom_mapping = {**atom_mapping1, **atom_mapping0}
+    atom_index_mask = [atom_mapping[i] for i in range(len(atom_mapping))]
+
+    # Assign the coordinates based on the atom index mask
+    siremol = molecule.copy()._sire_object.edit()
+    squashed_coordinates = squashed_molecule._sire_object.property("coordinates").toVector()
+    coordinates = _SireMol.AtomCoords([squashed_coordinates[i] for i in atom_index_mask])
+    siremol = siremol.setProperty("coordinates0", coordinates).molecule()
+    siremol = siremol.setProperty("coordinates1", coordinates).molecule()
+
+    # Optionally update the velocities
+    if squashed_molecule._sire_object.hasProperty("velocity"):
+        squashed_velocities = squashed_molecule._sire_object.property("velocity").toVector()
+        velocities = _SireMol.AtomVelocities([squashed_velocities[i] for i in atom_index_mask])
+        siremol = siremol.setProperty("velocity0", velocities).molecule()
+        siremol = siremol.setProperty("velocity1", velocities).molecule()
+
+    return _Molecule(siremol.commit())
+
+
+def _squashed_atom_mapping(system, is_lambda1=False):
+    if isinstance(system, _Molecule):
+        return _squashed_atom_mapping(system.toSystem(), is_lambda1=is_lambda1)
+
+    atom_mapping = {}
+    atom_idx, squashed_atom_idx = 0, 0
+    for molecule in system:
+        if not molecule.isPerturbable():
+            atom_indices = _np.arange(atom_idx, atom_idx + molecule.nAtoms())
+            squashed_atom_indices = _np.arange(squashed_atom_idx, squashed_atom_idx + molecule.nAtoms())
+            atom_mapping.update(dict(zip(atom_indices, squashed_atom_indices)))
+            atom_idx += molecule.nAtoms()
+            squashed_atom_idx += molecule.nAtoms()
+        else:
+            for residue in molecule.getResidues():
+                in_mol0 = ["du" not in atom._sire_object.property("ambertype0") for atom in residue.getAtoms()]
+                in_mol1 = ["du" not in atom._sire_object.property("ambertype1") for atom in residue.getAtoms()]
+                ndummy0 = residue.nAtoms() - sum(in_mol1)
+                ndummy1 = residue.nAtoms() - sum(in_mol0)
+                ncommon = residue.nAtoms() - ndummy0 - ndummy1
+                natoms0 = ncommon + ndummy0
+                natoms1 = ncommon + ndummy1
+
+                if not is_lambda1:
+                    atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())[in_mol0]
+                    squashed_atom_indices = _np.arange(squashed_atom_idx, squashed_atom_idx + natoms0)
+                else:
+                    atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())[in_mol1]
+                    offset = squashed_atom_idx + natoms0
+                    squashed_atom_indices = _np.arange(offset, offset + natoms1)
+                atom_mapping.update(dict(zip(atom_indices, squashed_atom_indices)))
+                atom_idx += residue.nAtoms()
+                squashed_atom_idx += natoms0 + natoms1
+
+    return atom_mapping
