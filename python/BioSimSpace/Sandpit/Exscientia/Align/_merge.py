@@ -72,8 +72,8 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
             'allow_ring_size_change'.
 
 		roi : list
-			The region of interest to merge. Consist of two lists of atom indices.  
-		
+			The region of interest to merge. Consist of two lists of atom indices.
+
         property_map0 : dict
             A dictionary that maps "properties" in this molecule to their
             user defined values. This allows the user to refer to properties
@@ -837,10 +837,10 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
                                      "allow this perturbation, try using the 'allow_ring_breaking' "
                                      "or 'allow_ring_size_change' options.")
 
-    # Create the connectivity object
+    # Create the connectivity object.
     conn = _SireMol.Connectivity(edit_mol.info()).edit()
 
-    # Connectivity in the merged molecule 
+    # Connectivity in the merged molecule.
     conn0 = _SireMol.Connectivity(edit_mol.info()).edit()
     conn1 = _SireMol.Connectivity(edit_mol.info()).edit()
 
@@ -1496,10 +1496,10 @@ def _squash_properties(molecule, keep_lambda0=True, keep_lambda1=True):
         raise ValueError("Need to keep at least one of the endpoint lambda properties")
 
     sire_mol = molecule._sire_object.edit()
-    types1 = sire_mol.property("ambertype1").toVector()
-    dummies1 = [i for i, x in enumerate(types1) if "du" in x]
+    types0 = sire_mol.property("ambertype0").toVector()
+    dummies0 = [i for i, x in enumerate(types0) if "du" in x]
 
-    # We start off by removing the "is_perturbable" attribute
+    # We start off by removing the "is_perturbable" attribute.
     if "is_perturbable" in sire_mol.propertyKeys():
         sire_mol = sire_mol.removeProperty("is_perturbable").molecule()
 
@@ -1530,7 +1530,7 @@ def _squash_properties(molecule, keep_lambda0=True, keep_lambda1=True):
             prop0 = prop0.toVector()
             prop1 = prop1.toVector()
             prop = _copy.copy(prop0)
-            for i in dummies1:
+            for i in dummies0:
                 prop[i] = prop1[i]
 
             # Set the properties (not yet possible to do it on a per-molecule basis, so we have to iterate).
@@ -1567,10 +1567,11 @@ def _unsquash(system, squashed_system, mapping):
         # Squash() puts all perturbable molecules at the end of the system so we prune them from the mapping now.
         pertmol_offset = len(new_system) - new_system.nPerturbableMolecules()
         nonpertmol_mapping = {k: v for k, v in mapping.items() if v.value() < pertmol_offset}
-        new_system._sire_object, _ = _SireIO.updateCoordinatesAndVelocities(
-            new_system._sire_object,
-            squashed_system._sire_object,
-            nonpertmol_mapping)
+        if nonpertmol_mapping:
+            new_system._sire_object, _ = _SireIO.updateCoordinatesAndVelocities(
+                new_system._sire_object,
+                squashed_system._sire_object,
+                nonpertmol_mapping)
 
     # From now on we handle all perturbed molecules.
     pertmol_idxs = [i for i, molecule in enumerate(new_system.getMolecules()) if molecule.isPerturbable()]
@@ -1634,11 +1635,12 @@ def _squashed_atom_mapping(system, is_lambda1=False):
         return _squashed_atom_mapping(system.toSystem(), is_lambda1=is_lambda1)
 
     molecule_mapping = _squashed_molecule_mapping(system)
+    molecule_mapping_rev = {v: k for k, v in molecule_mapping.items()}
 
     atom_mapping = {}
     atom_idx, squashed_atom_idx = 0, 0
     for i in range(len(system)):
-        mol_idx = molecule_mapping[_SireMol.MolIdx(i)].value()
+        mol_idx = molecule_mapping_rev[_SireMol.MolIdx(i)].value()
         molecule = system[mol_idx]
 
         if not molecule.isPerturbable():
