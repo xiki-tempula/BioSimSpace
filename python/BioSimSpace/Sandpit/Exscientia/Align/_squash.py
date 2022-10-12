@@ -181,20 +181,26 @@ def _unsquash_molecule(molecule, squashed_molecule):
     return _Molecule(siremol.commit())
 
 
-def _squashed_molecule_mapping(system):
-    # TODO: incorporate into squash()
-    # TODO: MolIdx vs int?
+def _squashed_molecule_mapping(system, is_lambda1=False):
     # Get the perturbable molecules and their corresponding indices.
-    pertmol_idxs = [i for i, molecule in enumerate(system.getMolecules()) if molecule.isPerturbable()]
+    pertmol_idxs = [i for i, molecule in enumerate(system) if molecule.isPerturbable()]
 
     # Add them back at the end of the system. This is generally faster than keeping their order the same.
     new_indices = list(range(system.nMolecules()))
     for pertmol_idx in pertmol_idxs:
         new_indices.remove(pertmol_idx)
-        new_indices.append(pertmol_idx)
+
+        # Multi-residue molecules are squashed to one molecule with extra residues.
+        if system[pertmol_idx].nResidues() > 1:
+            new_indices.append(pertmol_idx)
+        # Since we have two squashed molecules, we pick the first one at lambda=0 and the second one at lambda = 1.
+        elif not is_lambda1:
+            new_indices.extend([pertmol_idx, None])
+        else:
+            new_indices.extend([None, pertmol_idx])
 
     # Create the old molecule index to new molecule index mapping.
-    mapping = {_SireMol.MolIdx(idx): _SireMol.MolIdx(i) for i, idx in enumerate(new_indices)}
+    mapping = {idx: i for i, idx in enumerate(new_indices) if idx is not None}
 
     return mapping
 
@@ -203,13 +209,13 @@ def _squashed_atom_mapping(system, is_lambda1=False):
     if isinstance(system, _Molecule):
         return _squashed_atom_mapping(system.toSystem(), is_lambda1=is_lambda1)
 
-    molecule_mapping = _squashed_molecule_mapping(system)
+    molecule_mapping = _squashed_molecule_mapping(system, is_lambda1=is_lambda1)
     molecule_mapping_rev = {v: k for k, v in molecule_mapping.items()}
 
     atom_mapping = {}
     atom_idx, squashed_atom_idx = 0, 0
     for i in range(len(system)):
-        mol_idx = molecule_mapping_rev[_SireMol.MolIdx(i)].value()
+        mol_idx = molecule_mapping_rev[i]
         molecule = system[mol_idx]
 
         if not molecule.isPerturbable():

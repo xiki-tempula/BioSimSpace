@@ -29,13 +29,23 @@ def test_squash(perturbed_system):
     # First we must have the unperturbed molecules, and then the perturbed ones.
     assert n_atoms == [12, 21, 24, 15, 18, 27, 30]
     python_mapping = {k.value(): v.value() for k, v in mapping.items()}
-    assert python_mapping == {0: 0, 2: 1, 3: 2, 1: 3, 4: 4}
+    assert python_mapping == {0: 0, 2: 1, 3: 2}
 
 
 def test_squash_multires(perturbed_tripeptide):
     squashed_system, mapping = BSS.Align._squash._squash(perturbed_tripeptide)
     assert len(squashed_system) == 1
     assert len(squashed_system[0].getResidues()) == 4
+
+
+@pytest.mark.parametrize("is_lambda1", [False, True])
+def test_squashed_molecule_mapping(perturbed_system, is_lambda1):
+    res = BSS.Align._squash._squashed_molecule_mapping(perturbed_system, is_lambda1=is_lambda1)
+    if not is_lambda1:
+        expected = {0: 0, 2: 1, 3: 2, 1: 3, 4: 5}
+    else:
+        expected = {0: 0, 2: 1, 3: 2, 1: 4, 4: 6}
+    assert res == expected
 
 
 def test_unsquash(perturbed_system):
