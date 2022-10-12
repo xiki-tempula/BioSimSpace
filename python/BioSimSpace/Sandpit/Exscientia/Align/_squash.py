@@ -50,7 +50,6 @@ def _squash(system):
     new_indices = list(range(system.nMolecules()))
     for pertmol_idx, pert_mol in zip(pertmol_idxs, pert_mols):
         new_indices.remove(pertmol_idx)
-        new_indices.append(pertmol_idx)
         new_system += _squash_molecule(pert_mol)
 
     # Create the old molecule index to new molecule index mapping.
@@ -64,8 +63,8 @@ def _squash_molecule(molecule):
         return molecule
 
     # Generate a "system" from the molecule at lambda = 0 and another copy at lambda = 1.
-    mol0 = _squash_properties(_removeDummies(molecule, False), keep_lambda1=False)
-    mol1 = _squash_properties(_removeDummies(molecule, True), keep_lambda0=False)
+    mol0 = _removeDummies(molecule, False)
+    mol1 = _removeDummies(molecule, True)
     system = (mol0 + mol1).toSystem()
 
     # We only need to call tiMerge for multi-residue molecules
@@ -109,56 +108,6 @@ def _squash_molecule(molecule):
         squashed_mol = _readMolecules([f"{tempdir}/squashed.gro", f"{tempdir}/squashed.top"])
 
     return squashed_mol
-
-
-def _squash_properties(molecule, keep_lambda0=True, keep_lambda1=True):
-    if not keep_lambda0 and not keep_lambda1:
-        raise ValueError("Need to keep at least one of the endpoint lambda properties")
-
-    sire_mol = molecule._sire_object.edit()
-    types0 = sire_mol.property("ambertype0").toVector()
-    dummies0 = [i for i, x in enumerate(types0) if "du" in x]
-
-    # We start off by removing the "is_perturbable" attribute.
-    if "is_perturbable" in sire_mol.propertyKeys():
-        sire_mol = sire_mol.removeProperty("is_perturbable").molecule()
-
-    alch_properties = {x[:-1] for x in sire_mol.propertyKeys() if x[-1] in ("0", "1")}
-    for alch_property in alch_properties:
-        prop0 = sire_mol.property(f"{alch_property}0")
-        prop1 = sire_mol.property(f"{alch_property}1")
-
-        # Delete the old properties.
-        sire_mol = sire_mol.removeProperty(f"{alch_property}0").molecule()
-        sire_mol = sire_mol.removeProperty(f"{alch_property}1").molecule()
-
-        if prop0 == prop1 or (keep_lambda0 and not keep_lambda1):
-            sire_mol.setProperty(alch_property, prop0)
-        elif not keep_lambda0 and keep_lambda1:
-            sire_mol.setProperty(alch_property, prop1)
-        elif alch_property == "molecule":
-            continue
-        else:
-            # We assume the bonded terms are equal (they should be) but we still do a basic sanity check.
-            # TODO: add proper per-term checks?
-            if hasattr(prop0, "nFunctions"):
-                if prop0.nFunctions() != prop1.nFunctions():
-                    raise ValueError("The number of functions between the two molecules doesn't match")
-                sire_mol.setProperty(alch_property, prop0)
-                continue
-
-            prop0 = prop0.toVector()
-            prop1 = prop1.toVector()
-            prop = _copy.copy(prop0)
-            for i in dummies0:
-                prop[i] = prop1[i]
-
-            # Set the properties (not yet possible to do it on a per-molecule basis, so we have to iterate).
-            for i, atom_prop in enumerate(prop):
-                idx = _SireMol.AtomIdx(i)
-                sire_mol = sire_mol.atom(idx).setProperty(alch_property, atom_prop).molecule()
-
-    return _Molecule(sire_mol.commit())
 
 
 def _unsquash(system, squashed_system, mapping):
