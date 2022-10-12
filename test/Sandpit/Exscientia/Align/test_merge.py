@@ -1,3 +1,4 @@
+import pickle
 import pytest
 
 import BioSimSpace.Sandpit.Exscientia as BSS
@@ -14,16 +15,27 @@ def perturbed_system():
     return system
 
 
+@pytest.fixture
+def perturbed_tripeptide():
+    return pickle.load(open("test/Sandpit/Exscientia/input/morphs/merged_tripeptide.pickle", "rb"))
+
+
 def test_squash(perturbed_system):
     squashed_system, mapping = BSS.Align._merge._squash(perturbed_system)
-    assert len(squashed_system) == 5
+    assert len(squashed_system) == 7
     n_atoms = [mol.nAtoms() for mol in squashed_system]
     assert squashed_system[-2].getResidues()[0].name() == "LIG"
     assert squashed_system[-1].getResidues()[0].name() == "LIG"
     # First we must have the unperturbed molecules, and then the perturbed ones.
-    assert n_atoms == [12, 21, 24, 15 + 18, 27 + 30]
+    assert n_atoms == [12, 21, 24, 15, 18, 27, 30]
     python_mapping = {k.value(): v.value() for k, v in mapping.items()}
     assert python_mapping == {0: 0, 2: 1, 3: 2, 1: 3, 4: 4}
+
+
+def test_squash_multires(perturbed_tripeptide):
+    squashed_system, mapping = BSS.Align._merge._squash(perturbed_tripeptide)
+    assert len(squashed_system) == 1
+    assert len(squashed_system[0].getResidues()) == 4
 
 
 def test_unsquash(perturbed_system):

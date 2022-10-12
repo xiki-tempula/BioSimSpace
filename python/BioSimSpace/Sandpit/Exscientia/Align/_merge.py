@@ -29,14 +29,19 @@ __email__ = "lester.hedges@gmail.com"
 __all__ = ["merge"]
 
 import copy as _copy
+import itertools as _it
+import shutil as _shutil
+import tempfile
 
 import numpy as _np
+import parmed as _pmd
 from Sire import Base as _SireBase
 from Sire import IO as _SireIO
 from Sire import MM as _SireMM
 from Sire import Mol as _SireMol
 from Sire import Units as _SireUnits
 
+from ..IO import readMolecules as _readMolecules, saveMolecules as _saveMolecules
 from .._Exceptions import IncompatibleError as _IncompatibleError
 from .._SireWrappers import Molecule as _Molecule
 
@@ -1459,34 +1464,53 @@ def _squash(system):
 
 
 def _squash_molecule(molecule):
-    # Generate the new mapping between the two dummy-free endpoint molecules
-    mapping = {}
-    roi0, roi1 = set(), set()
-    i0, i1 = 0, 0
-    for residue in molecule.getResidues():
-        types0 = [atom._sire_object.property("ambertype0") for atom in residue.getAtoms()]
-        types1 = [atom._sire_object.property("ambertype1") for atom in residue.getAtoms()]
-        is_perturbed = any("du" in x for x in types0 + types1)
+    if not molecule.isPerturbable():
+        return molecule
 
-        for type0, type1 in zip(types0, types1):
-            # We treat perturbed residues in a completely dual-topology fashion, so we exclude them from the mapping.
-            if not is_perturbed:
-                mapping[_SireMol.AtomIdx(i0)] = _SireMol.AtomIdx(i1)
-            else:
-                if "du" not in type0:
-                    roi0.add(i0)
-                if "du" not in type1:
-                    roi1.add(i1)
-            if "du" not in type0:
-                i0 += 1
-            if "du" not in type1:
-                i1 += 1
-
-    # Generate the squashed molecule
+    # Generate a "system" from the molecule at lambda = 0 and another copy at lambda = 1.
     mol0 = _squash_properties(_removeDummies(molecule, False), keep_lambda1=False)
     mol1 = _squash_properties(_removeDummies(molecule, True), keep_lambda0=False)
-    squashed_mol = merge(mol0, mol1, mapping=mapping, roi=[sorted(roi0), sorted(roi1)])
-    squashed_mol = _squash_properties(squashed_mol)
+    system = (mol0 + mol1).toSystem()
+
+    # We only need to call tiMerge for multi-residue molecules
+    if molecule.nResidues() == 1:
+        return system
+
+    # Perform the multi-residue squashing with ParmEd as it is much easier and faster.
+    with tempfile.TemporaryDirectory() as tempdir:
+        # Load in ParmEd.
+        _saveMolecules(f"{tempdir}/temp", mol0 + mol1, "prm7,rst7")
+        _shutil.move(f"{tempdir}/temp.prm7", f"{tempdir}/temp.parm7")
+        parm = _pmd.load_file(f"{tempdir}/temp.parm7", xyz=f"{tempdir}/temp.rst7")
+
+        # Determine the molecule masks.
+        mol_mask0 = f"@1-{mol0.nAtoms()}"
+        mol_mask1 = f"@{mol0.nAtoms() + 1}-{system.nAtoms()}"
+
+        # Determine the residue masks.
+        atom0_offset, atom1_offset = 0, mol0.nAtoms()
+        res_atoms0, res_atoms1 = [], []
+        for res0, res1, res01 in zip(mol0.getResidues(), mol1.getResidues(), molecule.getResidues()):
+            # We assume the residue is only perturbable if any of the matching element symbols differ
+            atom_symbols0 = [atom._sire_object.property("element0").symbol() for atom in res01.getAtoms()]
+            atom_symbols1 = [atom._sire_object.property("element1").symbol() for atom in res01.getAtoms()]
+            if atom_symbols0 != atom_symbols1:
+                res_atoms0 += list(range(atom0_offset, atom0_offset + res0.nAtoms()))
+                res_atoms1 += list(range(atom1_offset, atom1_offset + res1.nAtoms()))
+            atom0_offset += res0.nAtoms()
+            atom1_offset += res1.nAtoms()
+        res_mask0 = _amber_mask_from_indices(res_atoms0)
+        res_mask1 = _amber_mask_from_indices(res_atoms1)
+
+        # Merge the residues.
+        action = _pmd.tools.tiMerge(parm, mol_mask0, mol_mask1, res_mask0, res_mask1)
+        action.execute()
+
+        # Reload into BioSimSpace.
+        # TODO: prm7/rst7 doesn't work for some reason so we need to use gro/top
+        parm.save(f"{tempdir}/squashed.gro", overwrite=True)
+        parm.save(f"{tempdir}/squashed.top", overwrite=True)
+        squashed_mol = _readMolecules([f"{tempdir}/squashed.gro", f"{tempdir}/squashed.top"])
 
     return squashed_mol
 
@@ -1677,3 +1701,44 @@ def _squashed_atom_mapping(system, is_lambda1=False):
 
     # Convert from NumPy integers to Python integers.
     return {int(k): int(v) for k, v in atom_mapping.items()}
+
+
+def _amber_mask_from_indices(atom_idxs):
+    """Internal helper function to create an AMBER mask from a list of atom indices.
+
+       Parameters
+       ----------
+
+       atom_idxs : [int]
+           A list of atom indices.
+
+       Returns
+       -------
+
+       mask : str
+           The AMBER mask.
+    """
+    # AMBER has a restriction on the number of characters in the restraint
+    # mask (not documented) so we can't just use comma-separated atom
+    # indices. Instead we loop through the indices and use hyphens to
+    # separate contiguous blocks of indices, e.g. 1-23,34-47,...
+
+    if atom_idxs:
+        # AMBER masks are 1-indexed, while BioSimSpace indices are 0-indexed.
+        atom_idxs = [x + 1 for x in sorted(list(set(atom_idxs)))]
+        if not all(isinstance(x, int) for x in atom_idxs):
+            raise TypeError("'atom_idxs' must be a list of 'int' types.")
+        groups = []
+        initial_idx = atom_idxs[0]
+        for prev_idx, curr_idx in _it.zip_longest(atom_idxs, atom_idxs[1:]):
+            if curr_idx != prev_idx + 1 or curr_idx is None:
+                if initial_idx == prev_idx:
+                    groups += [str(initial_idx)]
+                else:
+                    groups += [f"{initial_idx}-{prev_idx}"]
+                initial_idx = curr_idx
+        mask = "@" + ",".join(groups)
+    else:
+        mask = ""
+
+    return mask

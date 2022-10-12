@@ -1,14 +1,12 @@
-import itertools as _it
 import math as _math
 import warnings as _warnings
 
 from Sire import Units as _SireUnits
 
-from ..Align._merge import _squash, _squashed_atom_mapping
-from .._Exceptions import IncompatibleError as _IncompatibleError
-from ..Units.Time import nanosecond as _nanosecond
-
 from .. import Protocol as _Protocol
+from ..Align._merge import _squash, _squashed_atom_mapping, _amber_mask_from_indices
+from .._Exceptions import IncompatibleError as _IncompatibleError
+
 
 class ConfigFactory:
     # TODO: Integrate this class better into the other Protocols.
@@ -87,47 +85,6 @@ class ConfigFactory:
             steps = _math.ceil(self.protocol.getRunTime() / self.protocol.getTimeStep())
         return steps
 
-    def _amber_mask_from_indices(self, atom_idxs):
-        """Internal helper function to create an AMBER restraint mask from a
-           list of atom indices.
-
-           Parameters
-           ----------
-
-           atom_idxs : [int]
-               A list of atom indices.
-
-           Returns
-           -------
-
-           restraint_mask : str
-               The AMBER restraint mask.
-        """
-        # AMBER has a restriction on the number of characters in the restraint
-        # mask (not documented) so we can't just use comma-separated atom
-        # indices. Instead we loop through the indices and use hyphens to
-        # separate contiguous blocks of indices, e.g. 1-23,34-47,...
-
-        if atom_idxs:
-            # AMBER masks are 1-indexed, while BioSimSpace indices are 0-indexed.
-            atom_idxs = [x + 1 for x in sorted(list(set(atom_idxs)))]
-            if not all(isinstance(x, int) for x in atom_idxs):
-                raise TypeError("'atom_idxs' must be a list of 'int' types.")
-            groups = []
-            initial_idx = atom_idxs[0]
-            for prev_idx, curr_idx in _it.zip_longest(atom_idxs, atom_idxs[1:]):
-                if curr_idx != prev_idx + 1 or curr_idx is None:
-                    if initial_idx == prev_idx:
-                        groups += [str(initial_idx)]
-                    else:
-                        groups += [f"{initial_idx}-{prev_idx}"]
-                    initial_idx = curr_idx
-            mask = "@" + ",".join(groups)
-        else:
-            mask = ""
-
-        return mask
-
     def _generate_amber_fep_masks(self, timestep):
         """Internal helper function which generates timasks and scmasks based on the system.
 
@@ -170,14 +127,14 @@ class ConfigFactory:
         if timestep >= 0.004:
             no_shake_mask = ""
         else:
-            no_shake_mask = self._amber_mask_from_indices(mcs0_indices + mcs1_indices)
+            no_shake_mask = _amber_mask_from_indices(mcs0_indices + mcs1_indices)
 
         # Create an option dict with amber masks generated from the above indices.
         option_dict = {
-            "timask1": f"\"{self._amber_mask_from_indices(ti0_indices)}\"",
-            "timask2": f"\"{self._amber_mask_from_indices(ti1_indices)}\"",
-            "scmask1": f"\"{self._amber_mask_from_indices(dummy0_indices)}\"",
-            "scmask2": f"\"{self._amber_mask_from_indices(dummy1_indices)}\"",
+            "timask1": f"\"{_amber_mask_from_indices(ti0_indices)}\"",
+            "timask2": f"\"{_amber_mask_from_indices(ti1_indices)}\"",
+            "scmask1": f"\"{_amber_mask_from_indices(dummy0_indices)}\"",
+            "scmask2": f"\"{_amber_mask_from_indices(dummy1_indices)}\"",
             "noshakemask": f"\"{no_shake_mask}\"",
         }
 
@@ -273,7 +230,7 @@ class ConfigFactory:
                 # Don't add restraints if there are no atoms to restrain.
                 if len(atom_idxs) > 0:
                     # Generate the restraint mask based on atom indices.
-                    restraint_mask = self._amber_mask_from_indices([i + 1 for i in atom_idxs])
+                    restraint_mask = _amber_mask_from_indices([i + 1 for i in atom_idxs])
 
                     # The restraintmask cannot be more than 256 characters.
                     if len(restraint_mask) > 256:
