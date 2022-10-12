@@ -48,6 +48,20 @@ def test_squashed_molecule_mapping(perturbed_system, is_lambda1):
     assert res == expected
 
 
+@pytest.mark.parametrize("is_lambda1", [False, True])
+def test_squashed_atom_mapping(perturbed_tripeptide, is_lambda1):
+    res = BSS.Align._squash._squashed_atom_mapping(perturbed_tripeptide, is_lambda1=is_lambda1)
+    if not is_lambda1:
+        merged_indices = list(range(16)) + list(range(16, 30)) + list(range(43, 51))
+        squashed_indices = list(range(16)) + list(range(16, 30)) + list(range(30, 38))
+    else:
+        merged_indices = list(range(16)) + list(range(16, 21)) + list(range(23, 26)) + \
+                         list(range(30, 43)) + list(range(43, 51))
+        squashed_indices = list(range(16)) + list(range(38, 59)) + list(range(30, 38))
+    expected = dict(zip(merged_indices, squashed_indices))
+    assert res == expected
+
+
 def test_unsquash(perturbed_system):
     squashed_system, mapping = BSS.Align._squash._squash(perturbed_system)
     new_perturbed_system = BSS.Align._squash._unsquash(perturbed_system, squashed_system, mapping)

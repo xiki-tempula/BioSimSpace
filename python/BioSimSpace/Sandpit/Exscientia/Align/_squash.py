@@ -225,34 +225,66 @@ def _squashed_atom_mapping(system, is_lambda1=False):
             atom_idx += molecule.nAtoms()
             squashed_atom_idx += molecule.nAtoms()
         else:
-            for residue in molecule.getResidues():
-                in_mol0 = ["du" not in atom._sire_object.property("ambertype0") for atom in residue.getAtoms()]
-                in_mol1 = ["du" not in atom._sire_object.property("ambertype1") for atom in residue.getAtoms()]
-                ndummy0 = residue.nAtoms() - sum(in_mol1)
-                ndummy1 = residue.nAtoms() - sum(in_mol0)
-                ncommon = residue.nAtoms() - ndummy0 - ndummy1
-                natoms0 = ncommon + ndummy0
-                natoms1 = ncommon + ndummy1
-
-                if ndummy0 == ndummy1 == 0:
-                    atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())
-                    squashed_atom_indices = _np.arange(squashed_atom_idx, squashed_atom_idx + residue.nAtoms())
-                    squashed_atom_idx += residue.nAtoms()
-                else:
-                    if not is_lambda1:
-                        atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())[in_mol0]
-                        squashed_atom_indices = _np.arange(squashed_atom_idx, squashed_atom_idx + natoms0)
-                    else:
-                        atom_indices = _np.arange(atom_idx, atom_idx + residue.nAtoms())[in_mol1]
-                        offset = squashed_atom_idx + natoms0
-                        squashed_atom_indices = _np.arange(offset, offset + natoms1)
-                    squashed_atom_idx += natoms0 + natoms1
-                atom_mapping.update(dict(zip(atom_indices, squashed_atom_indices)))
-                atom_idx += residue.nAtoms()
+            residue_atom_mapping, n_squashed_atoms = _squashed_atom_mapping_molecule(
+                molecule, offset_merged=atom_idx, offset_squashed=squashed_atom_idx, is_lambda1=is_lambda1)
+            atom_mapping.update(residue_atom_mapping)
+            atom_idx += molecule.nAtoms()
+            squashed_atom_idx += n_squashed_atoms
 
     # Convert from NumPy integers to Python integers.
     return {int(k): int(v) for k, v in atom_mapping.items()}
 
+
+def _squashed_atom_mapping_molecule(molecule, offset_merged=0, offset_squashed=0, is_lambda1=False):
+    if not molecule.isPerturbable():
+        return {offset_merged + i: offset_squashed + i for i in range(molecule.nAtoms())}
+
+    # Both mappings start from 0 and we add all offsets at the end.
+    mapping, mapping_lambda1 = {}, {}
+    atom_idx_merged, atom_idx_squashed, atom_idx_squashed_lambda1 = 0, 0, 0
+    for residue in molecule.getResidues():
+        types0 = [atom._sire_object.property("ambertype0") for atom in residue.getAtoms()]
+        types1 = [atom._sire_object.property("ambertype1") for atom in residue.getAtoms()]
+
+        if types0 == types1:
+            # The residue is not perturbed.
+            mapping.update({atom_idx_merged + i: atom_idx_squashed + i
+                            for i in range(residue.nAtoms())})
+            atom_idx_merged += residue.nAtoms()
+            atom_idx_squashed += residue.nAtoms()
+        else:
+            # The residue is perturbed.
+            in_mol0 = ["du" not in x for x in types0]
+            in_mol1 = ["du" not in x for x in types1]
+            ndummy0 = residue.nAtoms() - sum(in_mol1)
+            ndummy1 = residue.nAtoms() - sum(in_mol0)
+            ncommon = residue.nAtoms() - ndummy0 - ndummy1
+            natoms0 = ncommon + ndummy0
+            natoms1 = ncommon + ndummy1
+
+            if not is_lambda1:
+                atom_indices = _np.arange(atom_idx_merged, atom_idx_merged + residue.nAtoms())[in_mol0]
+                squashed_atom_indices = _np.arange(atom_idx_squashed, atom_idx_squashed + natoms0)
+                mapping.update(dict(zip(atom_indices, squashed_atom_indices)))
+            else:
+                atom_indices = _np.arange(atom_idx_merged, atom_idx_merged + residue.nAtoms())[in_mol1]
+                squashed_atom_indices = _np.arange(atom_idx_squashed_lambda1, atom_idx_squashed_lambda1 + natoms1)
+                mapping_lambda1.update(dict(zip(atom_indices, squashed_atom_indices)))
+
+            atom_idx_merged += residue.nAtoms()
+            atom_idx_squashed += natoms0
+            atom_idx_squashed_lambda1 += natoms1
+
+    # Finally add the appropriate offsets
+    all_ndummy1 = sum("du" in x for x in molecule._sire_object.property("ambertype0").toVector())
+    offset_squashed_lambda1 = molecule.nAtoms() - all_ndummy1
+    res = {
+        **{offset_merged + k: offset_squashed + v for k, v in mapping.items()},
+        **{offset_merged + k: offset_squashed + offset_squashed_lambda1 + v
+           for k, v in mapping_lambda1.items()}
+    }
+
+    return res, atom_idx_squashed + atom_idx_squashed_lambda1
 
 def _amber_mask_from_indices(atom_idxs):
     """Internal helper function to create an AMBER mask from a list of atom indices.
