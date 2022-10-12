@@ -51,7 +51,7 @@ from Sire import IO as _SireIO
 from Sire import Mol as _SireMol
 
 from .. import _amber_home, _isVerbose
-from ..Align._merge import _squash, _unsquash
+from ..Align._squash import _squash, _unsquash
 from .._Exceptions import IncompatibleError as _IncompatibleError
 from .._Exceptions import MissingSoftwareError as _MissingSoftwareError
 from .._SireWrappers import System as _System

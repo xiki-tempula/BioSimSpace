@@ -21,7 +21,7 @@ def perturbed_tripeptide():
 
 
 def test_squash(perturbed_system):
-    squashed_system, mapping = BSS.Align._merge._squash(perturbed_system)
+    squashed_system, mapping = BSS.Align._squash._squash(perturbed_system)
     assert len(squashed_system) == 7
     n_atoms = [mol.nAtoms() for mol in squashed_system]
     assert squashed_system[-2].getResidues()[0].name() == "LIG"
@@ -33,13 +33,13 @@ def test_squash(perturbed_system):
 
 
 def test_squash_multires(perturbed_tripeptide):
-    squashed_system, mapping = BSS.Align._merge._squash(perturbed_tripeptide)
+    squashed_system, mapping = BSS.Align._squash._squash(perturbed_tripeptide)
     assert len(squashed_system) == 1
     assert len(squashed_system[0].getResidues()) == 4
 
 
 def test_unsquash(perturbed_system):
-    squashed_system, mapping = BSS.Align._merge._squash(perturbed_system)
-    new_perturbed_system = BSS.Align._merge._unsquash(perturbed_system, squashed_system, mapping)
+    squashed_system, mapping = BSS.Align._squash._squash(perturbed_system)
+    new_perturbed_system = BSS.Align._squash._unsquash(perturbed_system, squashed_system, mapping)
     assert [mol0.nAtoms() == mol1.nAtoms() for mol0, mol1 in zip(perturbed_system, new_perturbed_system)]
     assert [mol0.isPerturbable() == mol1.isPerturbable() for mol0, mol1 in zip(perturbed_system, new_perturbed_system)]

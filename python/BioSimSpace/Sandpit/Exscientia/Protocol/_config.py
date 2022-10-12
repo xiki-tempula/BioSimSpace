@@ -4,7 +4,7 @@ import warnings as _warnings
 from Sire import Units as _SireUnits
 
 from .. import Protocol as _Protocol
-from ..Align._merge import _squash, _squashed_atom_mapping, _amber_mask_from_indices
+from ..Align._squash import _squash, _squashed_atom_mapping, _amber_mask_from_indices
 from .._Exceptions import IncompatibleError as _IncompatibleError
 
 
