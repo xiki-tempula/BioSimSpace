@@ -133,31 +133,40 @@ def _unsquash(system, squashed_system, mapping):
 
     # Update the unperturbed molecule coordinates in the original new_system using the mapping.
     if mapping:
-        # Squash() puts all perturbable molecules at the end of the system so we prune them from the mapping now.
-        pertmol_offset = len(new_system) - new_system.nPerturbableMolecules()
-        nonpertmol_mapping = {k: v for k, v in mapping.items() if v.value() < pertmol_offset}
-        if nonpertmol_mapping:
-            new_system._sire_object, _ = _SireIO.updateCoordinatesAndVelocities(
+        new_system._sire_object, _ = _SireIO.updateCoordinatesAndVelocities(
                 new_system._sire_object,
                 squashed_system._sire_object,
-                nonpertmol_mapping)
+                mapping)
 
     # From now on we handle all perturbed molecules.
     pertmol_idxs = [i for i, molecule in enumerate(new_system.getMolecules()) if molecule.isPerturbable()]
-    pertmols = new_system.getPerturbableMolecules()
-    squashed_pertmols = squashed_system[-new_system.nPerturbableMolecules():]
 
-    for i, pertmol, squashed_pertmol in zip(pertmol_idxs, pertmols, squashed_pertmols):
-        new_pertmol = _unsquash_molecule(pertmol, squashed_pertmol)
-        new_system.updateMolecule(i, new_pertmol)
+    # Get the molecule mapping and combine it with the lambda=0 molecule being prioritised
+    molecule_mapping0 = _squashed_molecule_mapping(new_system, is_lambda1=False)
+    molecule_mapping1 = _squashed_molecule_mapping(new_system, is_lambda1=True)
+    molecule_mapping0_rev = {v: k for k, v in molecule_mapping0.items()}
+    molecule_mapping1_rev = {v: k for k, v in molecule_mapping1.items()}
+    molecule_mapping_rev = {**molecule_mapping1_rev, **molecule_mapping0_rev}
+    molecule_mapping_rev = {k: v for k, v in molecule_mapping_rev.items() if v in pertmol_idxs}
+
+    # Update the perturbed molecule coordinates based on the molecule mapping
+    for merged_idx in set(molecule_mapping_rev.values()):
+        pertmol = new_system[merged_idx]
+        squashed_idx0 = molecule_mapping0[merged_idx]
+        squashed_idx1 = molecule_mapping1[merged_idx]
+
+        if squashed_idx0 == squashed_idx1:
+            squashed_molecules = squashed_system[squashed_idx0].toSystem()
+        else:
+            squashed_molecules = (squashed_system[squashed_idx0] + squashed_system[squashed_idx1]).toSystem()
+
+        new_pertmol = _unsquash_molecule(pertmol, squashed_molecules)
+        new_system.updateMolecule(merged_idx, new_pertmol)
 
     return new_system
 
 
-def _unsquash_molecule(molecule, squashed_molecule):
-    if molecule.nResidues() != squashed_molecule.nResidues():
-        raise ValueError("The number of residues between the squashed and unsquashed molecules does not match")
-
+def _unsquash_molecule(molecule, squashed_molecules):
     # Get the atom mapping and combine it with the lambda=0 molecule being prioritised
     atom_mapping0 = _squashed_atom_mapping(molecule, is_lambda1=False)
     atom_mapping1 = _squashed_atom_mapping(molecule, is_lambda1=True)
@@ -166,14 +175,14 @@ def _unsquash_molecule(molecule, squashed_molecule):
 
     # Assign the coordinates based on the atom index mask
     siremol = molecule.copy()._sire_object.edit()
-    squashed_coordinates = squashed_molecule._sire_object.property("coordinates").toVector()
+    squashed_coordinates = sum([x._sire_object.property("coordinates").toVector() for x in squashed_molecules], [])
     coordinates = _SireMol.AtomCoords([squashed_coordinates[i] for i in atom_index_mask])
     siremol = siremol.setProperty("coordinates0", coordinates).molecule()
     siremol = siremol.setProperty("coordinates1", coordinates).molecule()
 
     # Optionally update the velocities
-    if squashed_molecule._sire_object.hasProperty("velocity"):
-        squashed_velocities = squashed_molecule._sire_object.property("velocity").toVector()
+    if squashed_molecules[0]._sire_object.hasProperty("velocity"):
+        squashed_velocities = sum([x._sire_object.property("velocity").toVector() for x in squashed_molecules], [])
         velocities = _SireMol.AtomVelocities([squashed_velocities[i] for i in atom_index_mask])
         siremol = siremol.setProperty("velocity0", velocities).molecule()
         siremol = siremol.setProperty("velocity1", velocities).molecule()
@@ -210,14 +219,12 @@ def _squashed_atom_mapping(system, is_lambda1=False):
         return _squashed_atom_mapping(system.toSystem(), is_lambda1=is_lambda1)
 
     molecule_mapping = _squashed_molecule_mapping(system, is_lambda1=is_lambda1)
-    molecule_mapping_rev = {v: k for k, v in molecule_mapping.items()}
 
+    # Both mappings start from 0 and we add all offsets at the end.
     atom_mapping = {}
-    atom_idx, squashed_atom_idx = 0, 0
-    for i in range(len(system)):
-        mol_idx = molecule_mapping_rev[i]
-        molecule = system[mol_idx]
-
+    atom_idx, squashed_atom_idx, squashed_atom_idx_perturbed = 0, 0, 0
+    squashed_offset = sum(x.nAtoms() for x in system if not x.isPerturbable())
+    for molecule in system:
         if not molecule.isPerturbable():
             atom_indices = _np.arange(atom_idx, atom_idx + molecule.nAtoms())
             squashed_atom_indices = _np.arange(squashed_atom_idx, squashed_atom_idx + molecule.nAtoms())
@@ -226,10 +233,14 @@ def _squashed_atom_mapping(system, is_lambda1=False):
             squashed_atom_idx += molecule.nAtoms()
         else:
             residue_atom_mapping, n_squashed_atoms = _squashed_atom_mapping_molecule(
-                molecule, offset_merged=atom_idx, offset_squashed=squashed_atom_idx, is_lambda1=is_lambda1)
+                molecule,
+                offset_merged=atom_idx,
+                offset_squashed=squashed_offset + squashed_atom_idx_perturbed,
+                is_lambda1=is_lambda1
+            )
             atom_mapping.update(residue_atom_mapping)
             atom_idx += molecule.nAtoms()
-            squashed_atom_idx += n_squashed_atoms
+            squashed_atom_idx_perturbed += n_squashed_atoms
 
     # Convert from NumPy integers to Python integers.
     return {int(k): int(v) for k, v in atom_mapping.items()}
