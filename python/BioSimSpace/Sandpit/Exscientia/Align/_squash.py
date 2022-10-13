@@ -171,21 +171,24 @@ def _unsquash_molecule(molecule, squashed_molecules):
     atom_mapping0 = _squashed_atom_mapping(molecule, is_lambda1=False)
     atom_mapping1 = _squashed_atom_mapping(molecule, is_lambda1=True)
     atom_mapping = {**atom_mapping1, **atom_mapping0}
-    atom_index_mask = [atom_mapping[i] for i in range(len(atom_mapping))]
+    update_velocity = squashed_molecules[0]._sire_object.hasProperty("velocity")
 
-    # Assign the coordinates based on the atom index mask
+    # TODO: deal with PBC
     siremol = molecule.copy()._sire_object.edit()
-    squashed_coordinates = sum([x._sire_object.property("coordinates").toVector() for x in squashed_molecules], [])
-    coordinates = _SireMol.AtomCoords([squashed_coordinates[i] for i in atom_index_mask])
-    siremol = siremol.setProperty("coordinates0", coordinates).molecule()
-    siremol = siremol.setProperty("coordinates1", coordinates).molecule()
+    for merged_atom_idx, squashed_atom_idx in atom_mapping.items():
+        merged_atom = siremol.atom(_SireMol.AtomIdx(merged_atom_idx))
+        squashed_atom = squashed_molecules.getAtom(squashed_atom_idx)
 
-    # Optionally update the velocities
-    if squashed_molecules[0]._sire_object.hasProperty("velocity"):
-        squashed_velocities = sum([x._sire_object.property("velocity").toVector() for x in squashed_molecules], [])
-        velocities = _SireMol.AtomVelocities([squashed_velocities[i] for i in atom_index_mask])
-        siremol = siremol.setProperty("velocity0", velocities).molecule()
-        siremol = siremol.setProperty("velocity1", velocities).molecule()
+        # Update the coordinates
+        coordinates = squashed_atom._sire_object.property("coordinates")
+        siremol = merged_atom.setProperty("coordinates0", coordinates).molecule()
+        siremol = merged_atom.setProperty("coordinates1", coordinates).molecule()
+
+        # Update the velocities
+        if update_velocity:
+            velocities = squashed_atom._sire_object.property("velocity")
+            siremol = merged_atom.setProperty("velocity0", velocities).molecule()
+            siremol = merged_atom.setProperty("velocity1", velocities).molecule()
 
     return _Molecule(siremol.commit())
 
