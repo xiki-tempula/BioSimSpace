@@ -1,5 +1,5 @@
-import copy as _copy
 import itertools as _it
+import os as _os
 import shutil as _shutil
 import tempfile
 
@@ -99,6 +99,7 @@ def _squash_molecule(molecule):
 
         # Merge the residues.
         action = _pmd.tools.tiMerge(parm, mol_mask0, mol_mask1, res_mask0, res_mask1)
+        action.output = open(_os.devnull, 'w')  # Avoid some of the spam
         action.execute()
 
         # Reload into BioSimSpace.
