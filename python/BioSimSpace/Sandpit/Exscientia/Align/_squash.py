@@ -173,18 +173,34 @@ def _unsquash_molecule(molecule, squashed_molecules):
     atom_mapping = {**atom_mapping1, **atom_mapping0}
     update_velocity = squashed_molecules[0]._sire_object.hasProperty("velocity")
 
-    # TODO: deal with PBC
+    # Even though the two molecules should have the same coordinates, they might be PBC wrapped differently.
+    # Here we take the first common core atom and translate the second molecule.
+    if len(squashed_molecules) == 2:
+        common_atoms = set(atom_mapping0.keys()) & set(atom_mapping1.keys())
+        first_common_atom = list(sorted(common_atoms))[0]
+        pertatom0 = squashed_molecules.getAtom(atom_mapping0[first_common_atom])
+        pertatom1 = squashed_molecules.getAtom(atom_mapping1[first_common_atom])
+        pertatom_coords0 = pertatom0._sire_object.property("coordinates")
+        pertatom_coords1 = pertatom1._sire_object.property("coordinates")
+        translation_vec = pertatom_coords1 - pertatom_coords0
+
+    # Update the coordinates and velocities.
     siremol = molecule.copy()._sire_object.edit()
     for merged_atom_idx, squashed_atom_idx in atom_mapping.items():
         merged_atom = siremol.atom(_SireMol.AtomIdx(merged_atom_idx))
         squashed_atom = squashed_molecules.getAtom(squashed_atom_idx)
 
-        # Update the coordinates
+        # Update the coordinates.
         coordinates = squashed_atom._sire_object.property("coordinates")
+
+        # Apply the translation if the atom is coming from the second molecule.
+        if len(squashed_molecules) == 2 and squashed_atom_idx in atom_mapping1.values():
+            coordinates -= translation_vec
+
         siremol = merged_atom.setProperty("coordinates0", coordinates).molecule()
         siremol = merged_atom.setProperty("coordinates1", coordinates).molecule()
 
-        # Update the velocities
+        # Update the velocities.
         if update_velocity:
             velocities = squashed_atom._sire_object.property("velocity")
             siremol = merged_atom.setProperty("velocity0", velocities).molecule()
@@ -220,8 +236,6 @@ def _squashed_molecule_mapping(system, is_lambda1=False):
 def _squashed_atom_mapping(system, is_lambda1=False):
     if isinstance(system, _Molecule):
         return _squashed_atom_mapping(system.toSystem(), is_lambda1=is_lambda1)
-
-    molecule_mapping = _squashed_molecule_mapping(system, is_lambda1=is_lambda1)
 
     # Both mappings start from 0 and we add all offsets at the end.
     atom_mapping = {}
