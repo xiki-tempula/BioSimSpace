@@ -67,3 +67,10 @@ def test_unsquash(perturbed_system):
     new_perturbed_system = BSS.Align._squash._unsquash(perturbed_system, squashed_system, mapping)
     assert [mol0.nAtoms() == mol1.nAtoms() for mol0, mol1 in zip(perturbed_system, new_perturbed_system)]
     assert [mol0.isPerturbable() == mol1.isPerturbable() for mol0, mol1 in zip(perturbed_system, new_perturbed_system)]
+
+
+def test_unsquash_multires(perturbed_tripeptide):
+    squashed_system, mapping = BSS.Align._squash._squash(perturbed_tripeptide)
+    new_perturbed_system = BSS.Align._squash._unsquash(perturbed_tripeptide, squashed_system, mapping)
+    assert [mol0.nAtoms() == mol1.nAtoms() for mol0, mol1 in zip(perturbed_tripeptide, new_perturbed_system)]
+    assert [mol0.isPerturbable() == mol1.isPerturbable() for mol0, mol1 in zip(perturbed_tripeptide, new_perturbed_system)]
