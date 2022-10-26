@@ -272,10 +272,10 @@ def _squashed_atom_mapping_molecule(molecule, offset_merged=0, offset_squashed=0
     mapping, mapping_lambda1 = {}, {}
     atom_idx_merged, atom_idx_squashed, atom_idx_squashed_lambda1 = 0, 0, 0
     for residue in molecule.getResidues():
-        types0 = [atom._sire_object.property("ambertype0") for atom in residue.getAtoms()]
-        types1 = [atom._sire_object.property("ambertype1") for atom in residue.getAtoms()]
+        elem0 = [atom._sire_object.property("element0") for atom in residue.getAtoms()]
+        elem1 = [atom._sire_object.property("element1") for atom in residue.getAtoms()]
 
-        if types0 == types1:
+        if elem0 == elem1:
             # The residue is not perturbed.
             mapping.update({atom_idx_merged + i: atom_idx_squashed + i
                             for i in range(residue.nAtoms())})
@@ -283,6 +283,8 @@ def _squashed_atom_mapping_molecule(molecule, offset_merged=0, offset_squashed=0
             atom_idx_squashed += residue.nAtoms()
         else:
             # The residue is perturbed.
+            types0 = [atom._sire_object.property("ambertype0") for atom in residue.getAtoms()]
+            types1 = [atom._sire_object.property("ambertype1") for atom in residue.getAtoms()]
             in_mol0 = ["du" not in x for x in types0]
             in_mol1 = ["du" not in x for x in types1]
             ndummy0 = residue.nAtoms() - sum(in_mol1)
