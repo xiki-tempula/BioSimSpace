@@ -12,7 +12,7 @@ class ConfigFactory:
     # TODO: Integrate this class better into the other Protocols.
     """A class for generating a config based on a template protocol."""
 
-    def __init__(self, system, protocol, squashed_system=None):
+    def __init__(self, system, protocol):
         """Constructor.
 
            Parameters
@@ -22,13 +22,9 @@ class ConfigFactory:
                The molecular system.
 
            protocol : :class:`Protocol <BioSimSpace.Protocol>`
-
-           squashed_system : :class:`System <BioSimSpace._SireWrappers.System>`
-               (Optional) an AMBER-compatible squashed system.
         """
         self.system = system
         self.protocol = protocol
-        self.squashed_system = squashed_system
 
     @property
     def _has_box(self):
@@ -100,10 +96,6 @@ class ConfigFactory:
            option_dict : dict
                A dictionary of AMBER-compatible options.
         """
-        # Squash the system into an AMBER-friendly format.
-        if self.squashed_system is None:
-            self.squashed_system, _ = _squash(self.system)
-
         # Get the merged to squashed atom mapping of the whole system for both endpoints.
         atom_mapping0 = _squashed_atom_mapping(self.system, is_lambda1=False)
         atom_mapping1 = _squashed_atom_mapping(self.system, is_lambda1=True)

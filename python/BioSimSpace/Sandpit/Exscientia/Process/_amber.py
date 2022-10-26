@@ -439,7 +439,7 @@ class Amber(_process.Process):
             setattr(self, "getTime", self._getTime)
 
         # Set the configuration.
-        config = _Protocol.ConfigFactory(self._system, self._protocol, squashed_system=self._squashed_system)
+        config = _Protocol.ConfigFactory(self._system, self._protocol)
         self.addToConfig(config.generateAmberConfig(extra_options={**config_options, **self._extra_options},
                                                     extra_lines=self._extra_lines))
 
