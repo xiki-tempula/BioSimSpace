@@ -1,6 +1,6 @@
-from Sire.MM import InternalFF, IntraCLJFF, IntraFF
-from Sire.Mol import AtomIdx, PartialMolecule
-from Sire.Maths import Vector
+from sire.legacy.MM import InternalFF, IntraCLJFF, IntraFF
+from sire.legacy.Mol import AtomIdx, PartialMolecule
+from sire.legacy.Maths import Vector
 
 import BioSimSpace.Sandpit.Exscientia as BSS
 

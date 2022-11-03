@@ -1,7 +1,7 @@
 import math as _math
 import warnings as _warnings
 
-from Sire import Units as _SireUnits
+from sire import units as _SireUnits
 
 from .. import Protocol as _Protocol
 from ..Align._squash import _squash, _squashed_atom_mapping, _amber_mask_from_indices
@@ -591,7 +591,7 @@ class ConfigFactory:
             protocol = [str(x) for x in self.protocol.getLambdaValues()]
             protocol_dict["lambda array"] = ", ".join(protocol)
             protocol_dict["lambda_val"] = self.protocol.getLambda()             # Current lambda value.
-            res_num = self.system.search("perturbable")[0]._sire_object.number().value()
+            res_num = self.system.search("perturbable").residues()[0]._sire_object.number().value()
             protocol_dict["perturbed residue number"] = res_num                 # Perturbed residue number.
 
         # Put everything together in a line-by-line format.

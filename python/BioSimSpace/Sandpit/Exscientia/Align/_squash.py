@@ -5,8 +5,8 @@ import tempfile
 
 import numpy as _np
 import parmed as _pmd
-from Sire import IO as _SireIO
-from Sire import Mol as _SireMol
+from sire.legacy import IO as _SireIO
+from sire.legacy import Mol as _SireMol
 
 from ._merge import _removeDummies
 from ..IO import readMolecules as _readMolecules, saveMolecules as _saveMolecules

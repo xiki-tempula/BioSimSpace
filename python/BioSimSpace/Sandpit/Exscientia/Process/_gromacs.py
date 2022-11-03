@@ -39,11 +39,12 @@ import subprocess as _subprocess
 import timeit as _timeit
 import warnings as _warnings
 
-from Sire import Base as _SireBase
-from Sire import IO as _SireIO
-from Sire import Maths as _SireMaths
-from Sire import Units as _SireUnits
-from Sire import Vol as _SireVol
+from sire.legacy import Base as _SireBase
+from sire.legacy import IO as _SireIO
+from sire.legacy import Maths as _SireMaths
+from sire.legacy import Vol as _SireVol
+
+from sire import units as _SireUnits
 
 from .. import _gmx_exe, _gmx_version
 from .. import _isVerbose
@@ -389,8 +390,8 @@ class Gromacs(_process.Process):
             command += " --maxwarn -1"
 
         # Run the command.
-        proc = _subprocess.run(_shlex.split(command), shell=False, text=True,
-            stdout=_subprocess.PIPE, stderr=_subprocess.PIPE)
+        proc = _subprocess.run(_Utils.command_split(command), shell=False,
+            text=True, stdout=_subprocess.PIPE, stderr=_subprocess.PIPE)
 
         # Check that grompp ran successfully.
         if proc.returncode != 0:
@@ -925,7 +926,7 @@ class Gromacs(_process.Process):
         return self.getAngleEnergy(time_series, block=False)
 
     def getDihedralEnergy(self, time_series=False, block="AUTO"):
-        """Get the dihedral energy.
+        """Get the total dihedral energy (proper + improper).
 
            Parameters
            ----------
@@ -940,12 +941,27 @@ class Gromacs(_process.Process):
            -------
 
            energy : :class:`Energy <BioSimSpace.Types.Energy>`
-               The dihedral energy.
+               The total dihedral energy.
         """
-        return self.getRecord("PROPERDIH", time_series, _Units.Energy.kj_per_mol, block)
+        # Get the proper and improper energies.
+        proper = self.getRecord("PROPERDIH", time_series, _Units.Energy.kj_per_mol, block)
+        improper = self.getRecord("IMPROPERDIH", time_series, _Units.Energy.kj_per_mol, block)
+
+        # No records.
+        if proper is None and improper is None:
+            return None
+        elif proper is None:
+            return improper
+        elif improper is None:
+            return proper
+        else:
+            if time_series:
+                return [x + y for x, y in zip(proper, improper)]
+            else:
+                return proper + improper
 
     def getCurrentDihedralEnergy(self, time_series=False):
-        """Get the current dihedral energy.
+        """Get the current total dihedral energy (proper + improper).
 
            Parameters
            ----------
@@ -960,6 +976,43 @@ class Gromacs(_process.Process):
                The dihedral energy.
         """
         return self.getDihedralEnergy(time_series, block=False)
+
+    def getProperEnergy(self, time_series=False, block="AUTO"):
+        """Get the proper dihedral energy.
+
+           Parameters
+           ----------
+
+           time_series : bool
+               Whether to return a list of time series records.
+
+           block : bool
+               Whether to block until the process has finished running.
+
+           Returns
+           -------
+
+           energy : :class:`Energy <BioSimSpace.Types.Energy>`
+               The proper dihedral energy.
+        """
+        return self.getRecord("PROPERDIH", time_series, _Units.Energy.kj_per_mol, block)
+
+    def getCurrentProperEnergy(self, time_series=False):
+        """Get the current proper dihedral energy.
+
+           Parameters
+           ----------
+
+           time_series : bool
+               Whether to return a list of time series records.
+
+           Returns
+           -------
+
+           energy : :class:`Energy <BioSimSpace.Types.Energy>`
+               The proper dihedral energy.
+        """
+        return self.getProperEnergy(time_series, block=False)
 
     def getImproperEnergy(self, time_series=False, block="AUTO"):
         """Get the improper energy.
@@ -979,7 +1032,7 @@ class Gromacs(_process.Process):
            energy : :class:`Energy <BioSimSpace.Types.Energy>`
                The improper energy.
         """
-        return self.getRecord("IMPRPROPERDIH", time_series, _Units.Energy.kj_per_mol, block)
+        return self.getRecord("IMPROPERDIH", time_series, _Units.Energy.kj_per_mol, block)
 
     def getCurrentImproperEnergy(self, time_series=False):
         """Get the current improper energy.
@@ -1690,8 +1743,9 @@ class Gromacs(_process.Process):
 
                     # Write the position restraint file for this molecule.
                     if len(restrained_atoms) > 0:
-                        # Create the file name.
-                        restraint_file = "%s/posre_%04d.itp" % (self._work_dir, num_restraint)
+                        # Create the file names.
+                        include_file = "posre_%04d.itp" % num_restraint
+                        restraint_file = "%s/%s" % (self._work_dir, include_file)
 
                         with open(restraint_file, "w") as file:
                             # Write the header.
@@ -1712,7 +1766,7 @@ class Gromacs(_process.Process):
                         new_top_lines = top_lines[:moltypes_top_idx[mol_type_idx+1] + offset - 1]
 
                         # Append the additional information.
-                        new_top_lines.append('#include "%s"' % restraint_file)
+                        new_top_lines.append('#include "%s"' % include_file)
                         new_top_lines.append("")
 
                         # Now extend with the remainder of the file.
@@ -1769,8 +1823,9 @@ class Gromacs(_process.Process):
 
                     # Write the position restraint file for this molecule.
                     if len(atom_idxs) > 0:
-                        # Create the file name.
-                        restraint_file = "%s/posre_%04d.itp" % (self._work_dir, num_restraint)
+                        # Create the file names.
+                        include_file = "posre_%04d.itp" % num_restraint
+                        restraint_file = "%s/%s" % (self._work_dir, include_file)
 
                         with open(restraint_file, "w") as file:
                             # Write the header.
@@ -1791,7 +1846,7 @@ class Gromacs(_process.Process):
                         new_top_lines = top_lines[:moltypes_top_idx[mol_type_idx+1] + offset - 1]
 
                         # Append the additional information.
-                        new_top_lines.append('#include "%s"' % restraint_file)
+                        new_top_lines.append('#include "%s"' % include_file)
                         new_top_lines.append("")
 
                         # Now extend with the remainder of the file.
@@ -2106,7 +2161,7 @@ class Gromacs(_process.Process):
 
                 # Run the command as a pipeline.
                 proc_echo = _subprocess.Popen(["echo", "0"], shell=False, stdout=_subprocess.PIPE)
-                proc = _subprocess.Popen(_shlex.split(command), shell=False,
+                proc = _subprocess.Popen(_Utils.command_split(command), shell=False,
                     stdin=proc_echo.stdout, stdout=_subprocess.PIPE, stderr=_subprocess.PIPE)
                 proc.wait()
                 proc_echo.stdout.close()
