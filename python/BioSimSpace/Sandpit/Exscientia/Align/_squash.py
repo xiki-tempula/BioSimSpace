@@ -124,10 +124,7 @@ def _squash_molecule(molecule):
         atom0_offset, atom1_offset = 0, mol0.nAtoms()
         res_atoms0, res_atoms1 = [], []
         for res0, res1, res01 in zip(mol0.getResidues(), mol1.getResidues(), molecule.getResidues()):
-            # We assume the residue is only perturbable if any of the matching element symbols differ
-            atom_symbols0 = [atom._sire_object.property("element0").symbol() for atom in res01.getAtoms()]
-            atom_symbols1 = [atom._sire_object.property("element1").symbol() for atom in res01.getAtoms()]
-            if atom_symbols0 != atom_symbols1:
+            if _is_perturbed(res01) or molecule.nResidues() == 1:
                 res_atoms0 += list(range(atom0_offset, atom0_offset + res0.nAtoms()))
                 res_atoms1 += list(range(atom1_offset, atom1_offset + res1.nAtoms()))
             atom0_offset += res0.nAtoms()
@@ -399,10 +396,7 @@ def _squashed_atom_mapping_molecule(molecule, offset_merged=0, offset_squashed=0
     mapping, mapping_lambda1 = {}, {}
     atom_idx_merged, atom_idx_squashed, atom_idx_squashed_lambda1 = 0, 0, 0
     for residue in molecule.getResidues():
-        elem0 = [atom._sire_object.property("element0") for atom in residue.getAtoms()]
-        elem1 = [atom._sire_object.property("element1") for atom in residue.getAtoms()]
-
-        if elem0 == elem1:
+        if not (_is_perturbed(residue) or molecule.nResidues() == 1):
             # The residue is not perturbed.
             mapping.update({atom_idx_merged + i: atom_idx_squashed + i
                             for i in range(residue.nAtoms())})
@@ -443,6 +437,28 @@ def _squashed_atom_mapping_molecule(molecule, offset_merged=0, offset_squashed=0
     }
 
     return res, atom_idx_squashed + atom_idx_squashed_lambda1
+
+
+def _is_perturbed(residue):
+    """This determines whether a merged residue is actually perturbed. Note that
+       it is possible that this function returns false negatives.
+
+       Parameters
+       ----------
+
+       residue : BioSimSpace._SireWrappers.Residue
+           The input residue.
+
+       Returns
+       -------
+
+       res : bool
+           Whether the residue is perturbed.
+    """
+    # If the elements are different, then we are definitely perturbing.
+    elem0 = [atom._sire_object.property("element0") for atom in residue.getAtoms()]
+    elem1 = [atom._sire_object.property("element1") for atom in residue.getAtoms()]
+    return elem0 != elem1
 
 
 def _amber_mask_from_indices(atom_idxs):
