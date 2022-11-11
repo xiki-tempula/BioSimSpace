@@ -69,7 +69,7 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
             takes precedence over 'allow_ring_breaking' and
             'allow_ring_size_change'.
 
-		roi : list
+        roi : list
 			The region of interest to merge. Consist of two lists of atom indices.
 
         property_map0 : dict
