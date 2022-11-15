@@ -617,6 +617,8 @@ class System(_SireWrapper):
                     # original molecular ordering.
                     system = _SireIO.updateAndPreserveOrder(
                             system, mol._sire_object, idx)
+            else:
+                raise ValueError(f"System doesn't contain molecule: {mol}")
 
         # Update the Sire object.
         self._sire_object = system
