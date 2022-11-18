@@ -175,9 +175,10 @@ def _unsquash(system, squashed_system, mapping):
     # Update the unperturbed molecule coordinates in the original new_system using the mapping.
     if mapping:
         new_system._sire_object, _ = _SireIO.updateCoordinatesAndVelocities(
-                new_system._sire_object,
-                squashed_system._sire_object,
-                mapping)
+            new_system._sire_object,
+            squashed_system._sire_object,
+            mapping
+        )
 
     # From now on we handle all perturbed molecules.
     pertmol_idxs = [i for i, molecule in enumerate(new_system.getMolecules()) if molecule.isPerturbable()]
