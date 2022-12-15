@@ -105,7 +105,8 @@ def test_gromacs(protocol, system, ref_system, tmp_path):
 
     # We have generated a separate restraint reference
     assert os.path.exists(proc._ref_file)
-    diff = list(unified_diff(open(proc._ref_file).readlines(), open(proc._gro_file).readlines()))
+    contents_ref, contents_gro = open(proc._ref_file).readlines(), open(proc._gro_file).readlines()
+    diff = list(unified_diff(contents_ref, contents_gro))
     assert len(diff)
 
 
@@ -120,7 +121,8 @@ def test_amber(protocol, system, ref_system, tmp_path):
 
     # We have generated a separate restraint reference
     assert os.path.exists(proc._ref_file)
-    diff = list(unified_diff(open(proc._ref_file).readlines(), open(proc._rst_file).readlines()))
+    contents_ref, contents_rst = open(proc._ref_file).readlines(), open(proc._rst_file).readlines()
+    diff = list(unified_diff(contents_ref, contents_rst))
     assert len(diff)
 
     # We are pointing the reference to the correct file

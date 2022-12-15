@@ -241,7 +241,7 @@ class Gromacs(_process.Process):
         )
 
         # Create the reference file
-        if self._ref_system is not None:
+        if self._ref_system is not None and self._protocol.getRestraint() is not None:
             self._write_system(self._ref_system, coord_file=self._ref_file)
         else:
             _shutil.copy(self._gro_file, self._ref_file)
