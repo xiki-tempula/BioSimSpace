@@ -838,21 +838,12 @@ def merge(molecule0, molecule1, mapping, allow_ring_breaking=False,
     # Create the connectivity object.
     conn = _SireMol.Connectivity(edit_mol.info()).edit()
 
-    # Connectivity in the merged molecule.
-    conn0 = _SireMol.Connectivity(edit_mol.info()).edit()
-    conn1 = _SireMol.Connectivity(edit_mol.info()).edit()
-
+    # Connect the bonded atoms. Connectivity is the same at lambda = 0
+    # and lambda = 1.
     for bond in edit_mol.property("bond0").potentials():
         conn.connect(bond.atom0(), bond.atom1())
-        conn0.connect(bond.atom0(), bond.atom1())
-
-    for bond in edit_mol.property("bond1").potentials():
-        conn.connect(bond.atom0(), bond.atom1())
-        conn1.connect(bond.atom0(), bond.atom1())
-
     conn = conn.commit()
-    conn0 = conn0.commit()
-    conn1 = conn1.commit()
+    conn0 = conn1 = conn
 
     # Get the connectivity of the two molecules.
     c0 = molecule0.property("connectivity")
