@@ -1556,10 +1556,18 @@ class Molecule(_SireWrapper):
 
                 # Replace the ambertype.
                 for dummy in search:
-                    mol = mol.atom(dummy.index()) \
-                             .setProperty(amber_type, amber_types[dummy.index().value()]).molecule()
-                    mol = mol.atom(dummy.index()) \
-                             .setProperty(element, elements[dummy.index().value()]).molecule()
+                    amber_type_value = amber_types[dummy.index().value()]
+                    element_value = elements[dummy.index().value()]
+
+                    # We have a dummy in both endstates so we try to infer the element.
+                    # This is not general so it is only suitable for some common cases.
+                    if element_value.symbol() == "Xx":
+                        name = property_map.get("name", "name")
+                        element_symbol = dummy.property(name)[0].upper()
+                        element_value = _SireMol.Element(element_symbol)
+
+                    mol = mol.atom(dummy.index()).setProperty(amber_type, amber_type_value).molecule()
+                    mol = mol.atom(dummy.index()).setProperty(element, element_value).molecule()
 
                 # Delete redundant properties.
                 mol = mol.removeProperty("ambertype0").molecule()

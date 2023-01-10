@@ -27,7 +27,7 @@ def test_squash(perturbed_system):
     assert squashed_system[-2].getResidues()[0].name() == "LIG"
     assert squashed_system[-1].getResidues()[0].name() == "LIG"
     # First we must have the unperturbed molecules, and then the perturbed ones.
-    assert n_atoms == [12, 21, 24, 15, 18, 27, 30]
+    assert n_atoms == [12, 21, 24, 18, 18, 30, 30]
     python_mapping = {k.value(): v.value() for k, v in mapping.items()}
     assert python_mapping == {0: 0, 2: 1, 3: 2}
 
@@ -51,13 +51,11 @@ def test_squashed_molecule_mapping(perturbed_system, is_lambda1):
 @pytest.mark.parametrize("is_lambda1", [False, True])
 def test_squashed_atom_mapping(perturbed_tripeptide, is_lambda1):
     res = BSS.Align._squash._squashed_atom_mapping(perturbed_tripeptide, is_lambda1=is_lambda1)
+    merged_indices = list(range(51))
     if not is_lambda1:
-        merged_indices = list(range(16)) + list(range(16, 30)) + list(range(43, 51))
-        squashed_indices = list(range(16)) + list(range(16, 30)) + list(range(30, 38))
+        squashed_indices = list(range(16)) + list(range(16, 43)) + list(range(43, 51))
     else:
-        merged_indices = list(range(16)) + list(range(16, 21)) + list(range(23, 26)) + \
-                         list(range(30, 43)) + list(range(43, 51))
-        squashed_indices = list(range(16)) + list(range(38, 59)) + list(range(30, 38))
+        squashed_indices = list(range(16)) + list(range(51, 78)) + list(range(43, 51))
     expected = dict(zip(merged_indices, squashed_indices))
     assert res == expected
 
