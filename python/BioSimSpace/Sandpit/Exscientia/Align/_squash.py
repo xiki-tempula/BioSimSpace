@@ -113,8 +113,12 @@ def _squash_molecule(molecule):
 
     # Generate a "system" from the molecule at lambda = 0 and another copy at lambda = 1.
     # These contain all the dummies because it's not always appropriate to remove them.
-    mol0 = molecule.copy()._toRegularMolecule(is_lambda1=False, convert_amber_dummies=True)
-    mol1 = molecule.copy()._toRegularMolecule(is_lambda1=True, convert_amber_dummies=True)
+    mol0 = molecule.copy()._toRegularMolecule(
+        is_lambda1=False, convert_amber_dummies=True
+    )
+    mol1 = molecule.copy()._toRegularMolecule(
+        is_lambda1=True, convert_amber_dummies=True
+    )
     system = (mol0 + mol1).toSystem()
 
     # We only need to call tiMerge for multi-residue molecules
@@ -391,13 +395,13 @@ def _squashed_atom_mapping(system, is_lambda1=False, environment=True, **kwargs)
 
 
 def _squashed_atom_mapping_molecule(
-        molecule,
-        offset_merged=0,
-        offset_squashed=0,
-        is_lambda1=False,
-        environment=True,
-        dummies=True,
-        common=True,
+    molecule,
+    offset_merged=0,
+    offset_squashed=0,
+    is_lambda1=False,
+    environment=True,
+    dummies=True,
+    common=True,
 ):
     """This internal function returns a dictionary whose keys correspond to the atom
     index of the each atom in the original merged molecule, and whose values
@@ -428,8 +432,8 @@ def _squashed_atom_mapping_molecule(
     if not molecule.isPerturbable():
         if environment:
             return {
-            offset_merged + i: offset_squashed + i for i in range(molecule.nAtoms())
-        }
+                offset_merged + i: offset_squashed + i for i in range(molecule.nAtoms())
+            }
         else:
             return {}
 
@@ -440,8 +444,12 @@ def _squashed_atom_mapping_molecule(
         if not (_is_perturbed(residue) or molecule.nResidues() == 1):
             # The residue is not perturbed.
             if common:
-                mapping.update({atom_idx_merged + i: atom_idx_squashed + i
-                                for i in range(residue.nAtoms())})
+                mapping.update(
+                    {
+                        atom_idx_merged + i: atom_idx_squashed + i
+                        for i in range(residue.nAtoms())
+                    }
+                )
             atom_idx_merged += residue.nAtoms()
             atom_idx_squashed += residue.nAtoms()
         else:
@@ -454,7 +462,9 @@ def _squashed_atom_mapping_molecule(
             types1 = [
                 atom._sire_object.property("ambertype1") for atom in residue.getAtoms()
             ]
-            dummy_mask = _np.asarray(["du" in x or "du" in y for x, y in zip(types0, types1)])
+            dummy_mask = _np.asarray(
+                ["du" in x or "du" in y for x, y in zip(types0, types1)]
+            )
             mcs_mask = ~dummy_mask
             # The implementation seems a bit redundant but is useful if we decide to
             # revert it back to using different number of atoms for the endstates.
@@ -480,9 +490,15 @@ def _squashed_atom_mapping_molecule(
 
             # Determine which atoms to return.
             if dummies:
-                mapping_to_update.update(dict(zip(atom_indices[dummy_mask], squashed_atom_indices[dummy_mask])))
+                mapping_to_update.update(
+                    dict(
+                        zip(atom_indices[dummy_mask], squashed_atom_indices[dummy_mask])
+                    )
+                )
             if common:
-                mapping_to_update.update(dict(zip(atom_indices[mcs_mask], squashed_atom_indices[mcs_mask])))
+                mapping_to_update.update(
+                    dict(zip(atom_indices[mcs_mask], squashed_atom_indices[mcs_mask]))
+                )
 
             # Increment the offsets and continue.
             atom_idx_merged += residue.nAtoms()

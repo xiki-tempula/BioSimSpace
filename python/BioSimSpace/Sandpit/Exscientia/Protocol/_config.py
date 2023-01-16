@@ -101,14 +101,18 @@ class ConfigFactory:
             A dictionary of AMBER-compatible options.
         """
         # Get the merged to squashed atom mapping of the whole system for both endpoints.
-        mcs_mapping0 = _squashed_atom_mapping(self.system, is_lambda1=False, environment=False, common=True,
-                                              dummies=False)
-        mcs_mapping1 = _squashed_atom_mapping(self.system, is_lambda1=True, environment=False, common=True,
-                                              dummies=False)
-        dummy_mapping0 = _squashed_atom_mapping(self.system, is_lambda1=False, environment=False, common=False,
-                                                dummies=True)
-        dummy_mapping1 = _squashed_atom_mapping(self.system, is_lambda1=True, environment=False, common=False,
-                                                dummies=True)
+        mcs_mapping0 = _squashed_atom_mapping(
+            self.system, is_lambda1=False, environment=False, common=True, dummies=False
+        )
+        mcs_mapping1 = _squashed_atom_mapping(
+            self.system, is_lambda1=True, environment=False, common=True, dummies=False
+        )
+        dummy_mapping0 = _squashed_atom_mapping(
+            self.system, is_lambda1=False, environment=False, common=False, dummies=True
+        )
+        dummy_mapping1 = _squashed_atom_mapping(
+            self.system, is_lambda1=True, environment=False, common=False, dummies=True
+        )
 
         # Generate the TI and dummy masks.
         mcs0_indices, mcs1_indices, dummy0_indices, dummy1_indices = [], [], [], []

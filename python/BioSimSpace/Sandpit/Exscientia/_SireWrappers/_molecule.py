@@ -1721,10 +1721,14 @@ class Molecule(_SireWrapper):
                         element_symbol = dummy.property(name)[0].upper()
                         element_value = _SireMol.Element(element_symbol)
 
-                    mol = (mol.atom(dummy.index()).setProperty(amber_type, amber_type_value)
+                    mol = (
+                        mol.atom(dummy.index())
+                        .setProperty(amber_type, amber_type_value)
                         .molecule()
                     )
-                    mol = (mol.atom(dummy.index()).setProperty(element, element_value)
+                    mol = (
+                        mol.atom(dummy.index())
+                        .setProperty(element, element_value)
                         .molecule()
                     )
 

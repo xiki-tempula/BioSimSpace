@@ -73,7 +73,9 @@ def merged_benzene_pyrrole(benzene, pyrrole, mapping_benzene_pyrrole):
     )
 
 
-def test__removeDummies(benzene, pyrrole, mapping_benzene_pyrrole, merged_benzene_pyrrole):
+def test__removeDummies(
+    benzene, pyrrole, mapping_benzene_pyrrole, merged_benzene_pyrrole
+):
     benzene_merged = _removeDummies(merged_benzene_pyrrole, is_lambda1=False)
     pyrrole_merged = _removeDummies(merged_benzene_pyrrole, is_lambda1=True)
     energy0_unmerged = get_energy(benzene)
