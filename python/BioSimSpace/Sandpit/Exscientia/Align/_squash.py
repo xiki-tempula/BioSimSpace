@@ -8,7 +8,6 @@ import parmed as _pmd
 from sire.legacy import IO as _SireIO
 from sire.legacy import Mol as _SireMol
 
-from ._merge import _removeDummies
 from ..IO import readMolecules as _readMolecules, saveMolecules as _saveMolecules
 from .._SireWrappers import Molecule as _Molecule
 
@@ -114,10 +113,10 @@ def _squash_molecule(molecule):
     # Generate a "system" from the molecule at lambda = 0 and another copy at lambda = 1.
     # These contain all the dummies because it's not always appropriate to remove them.
     mol0 = molecule.copy()._toRegularMolecule(
-        is_lambda1=False, convert_amber_dummies=True
+        is_lambda1=False, convert_amber_dummies=True, generate_intrascale=True
     )
     mol1 = molecule.copy()._toRegularMolecule(
-        is_lambda1=True, convert_amber_dummies=True
+        is_lambda1=True, convert_amber_dummies=True, generate_intrascale=True
     )
     system = (mol0 + mol1).toSystem()
 

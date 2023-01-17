@@ -1612,7 +1612,11 @@ class Molecule(_SireWrapper):
         self._sire_object = edit_mol.commit()
 
     def _toRegularMolecule(
-        self, property_map={}, is_lambda1=False, convert_amber_dummies=False
+        self,
+        property_map={},
+        is_lambda1=False,
+        convert_amber_dummies=False,
+        generate_intrascale=False,
     ):
         """
         Internal function to convert a merged molecule to a regular molecule.
@@ -1633,6 +1637,9 @@ class Molecule(_SireWrapper):
             Whether to convert dummies to the correct AMBER formatting for
             non-FEP simulations. This will replace the "du" ambertype
             and "Xx" element with the properties from the other end state.
+
+        generate_intrascale : bool
+            Whether to regenerate the intrascale matrix.
 
         Returns
         -------
@@ -1679,7 +1686,7 @@ class Molecule(_SireWrapper):
                 # Copy the property using the updated name.
                 mol = mol.setProperty(new_prop, mol.property(prop)).molecule()
 
-                # Store the amber types in the opposie end state.
+                # Store the amber types in the opposite end state.
                 if prop[:-1] == "ambertype":
                     if lam == "0":
                         amber_types = mol.property("ambertype1").toVector()
@@ -1737,6 +1744,10 @@ class Molecule(_SireWrapper):
                 mol = mol.removeProperty("ambertype1").molecule()
                 mol = mol.removeProperty("element0").molecule()
                 mol = mol.removeProperty("element1").molecule()
+
+        if generate_intrascale:
+            gro_sys = _SireIO.GroTop(_System(mol)._sire_object).toSystem()
+            mol.setProperty("intrascale", gro_sys[0].property("intrascale"))
 
         # Return the updated molecule.
         return Molecule(mol.commit())
