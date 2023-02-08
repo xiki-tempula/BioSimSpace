@@ -1712,8 +1712,8 @@ class Molecule(_SireWrapper):
             if mol.hasProperty(amber_type) and mol.hasProperty(element):
                 # Search for any dummy atoms.
                 try:
-                    search = mol["element Xx"]
-                except:
+                    search = mol.atoms("element Xx")
+                except KeyError:
                     search = []
 
                 # Replace the ambertype.
