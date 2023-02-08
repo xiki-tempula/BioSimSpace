@@ -1712,7 +1712,7 @@ class Molecule(_SireWrapper):
             if mol.hasProperty(amber_type) and mol.hasProperty(element):
                 # Search for any dummy atoms.
                 try:
-                    search = mol.search("element Xx")
+                    search = mol["element Xx"]
                 except:
                     search = []
 
@@ -1743,6 +1743,13 @@ class Molecule(_SireWrapper):
                 mol = mol.removeProperty("element1").molecule()
 
         if generate_intrascale:
+            # First we regenerate the connectivity based on the bonds.
+            conn = _SireMol.Connectivity(mol.info()).edit()
+            for bond in mol.property("bond").potentials():
+                conn.connect(bond.atom0(), bond.atom1())
+            mol.setProperty("connectivity", conn)
+
+            # Now we have the correct connectivity, we can regenerate the exclusions.
             gro_sys = _SireIO.GroTop(_System(mol)._sire_object).toSystem()
             mol.setProperty("intrascale", gro_sys[0].property("intrascale"))
 
