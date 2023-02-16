@@ -260,7 +260,6 @@ class ConfigFactory:
 
                     # The restraintmask cannot be more than 256 characters.
                     if len(restraint_mask) > 256:
-
                         # AMBER has a limit on the length of the restraintmask
                         # so it's easy to overflow if we are matching by index
                         # on a large protein. As such, handle "backbone" and

@@ -437,6 +437,9 @@ def _squashed_atom_mapping_molecule(
 
     mapping : dict(int, int)
         The corresponding atom mapping.
+
+    n_atoms : int
+        The number of squashed atoms that correspond to the squashed molecule.
     """
     if molecule.isDecoupled():
         if dummies and not is_lambda1:
@@ -478,12 +481,10 @@ def _squashed_atom_mapping_molecule(
             types1 = [
                 atom._sire_object.property("ambertype1") for atom in residue.getAtoms()
             ]
-            not_in_mol0 = _np.asarray(["du" in x for x in types0])
-            not_in_mol1 = _np.asarray(["du" in x for x in types1])
-            in_mol0 = ~not_in_mol0
-            in_mol1 = ~not_in_mol1
-            dummy0 = not_in_mol1
-            dummy1 = not_in_mol0
+            in_mol0 = _np.asarray(["du" not in x for x in types0])
+            in_mol1 = _np.asarray(["du" not in x for x in types1])
+            dummy0 = ~in_mol1
+            dummy1 = ~in_mol0
             common0 = _np.logical_and(in_mol0, ~dummy0)
             common1 = _np.logical_and(in_mol1, ~dummy1)
             ndummy0 = residue.nAtoms() - sum(in_mol1)
