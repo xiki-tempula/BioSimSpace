@@ -36,7 +36,6 @@ import sys as _sys
 import os as _os
 import shutil as _shutil
 import subprocess as _subprocess
-import tempfile as _tempfile
 import warnings as _warnings
 import zipfile as _zipfile
 
@@ -116,12 +115,12 @@ class Relative:
             The working directory for the free-energy perturbation
             simulation.
 
-        engine: str
+        engine : str
             The molecular dynamics engine used to run the simulation. Available
             options are "GROMACS", or "SOMD". If this argument is omitted then
             BioSimSpace will choose an appropriate engine for you.
 
-        setup_only: bool
+        setup_only : bool
             Whether to only support simulation setup. If True, then no
             simulation processes objects will be created, only the directory
             hierarchy and input files to run a simulation externally. This
@@ -170,22 +169,13 @@ class Relative:
         else:
             self._setup_only = setup_only
 
-        # Create a temporary working directory and store the directory name.
-        if work_dir is None:
-            if setup_only:
-                raise ValueError(
-                    "A 'work_dir' must be specified when 'setup_only' is True!"
-                )
-            self._tmp_dir = _tempfile.TemporaryDirectory()
-            self._work_dir = self._tmp_dir.name
+        if work_dir is None and setup_only:
+            raise ValueError(
+                "A 'work_dir' must be specified when 'setup_only' is True!"
+            )
 
-        # User specified working directory.
-        else:
-            self._work_dir = work_dir
-
-            # Create the directory if it doesn't already exist.
-            if not _os.path.isdir(work_dir):
-                _os.makedirs(work_dir, exist_ok=True)
+        # Create the working directory.
+        self._work_dir = _Utils.WorkDir(work_dir)
 
         # Validate the user specified molecular dynamics engine.
         if engine is not None:
@@ -198,7 +188,7 @@ class Relative:
             # Check that the engine is supported.
             if engine not in self._engines:
                 raise ValueError(
-                    "Unsupported molecular dynamics engine '%s'. "
+                    f"Unsupported molecular dynamics engine {engine}. "
                     "Supported engines are: %r." % ", ".join(self._engines)
                 )
 
@@ -310,7 +300,7 @@ class Relative:
         work_dir : str
             The path of the working directory.
         """
-        return self._work_dir
+        return str(self._work_dir)
 
     def getData(self, name="data", file_link=False, work_dir=None):
         """
@@ -459,7 +449,7 @@ class Relative:
 
         # Return the result of calling the staticmethod, passing in the working
         # directory of this object.
-        return Relative.analyse(self._work_dir)
+        return Relative.analyse(str(self._work_dir))
 
     @staticmethod
     def _analyse_gromacs(work_dir=None):
@@ -487,9 +477,10 @@ class Relative:
             raise ValueError("'work_dir' doesn't exist!")
 
         # Create the command.
-        command = "%s bar -f %s/lambda_*/*.xvg -o %s/bar.xvg" % (
+        xvg_files = _glob(f"{work_dir}/lambda_*/*.xvg")
+        command = "%s bar -f %s -o %s/bar.xvg" % (
             _gmx_exe,
-            work_dir,
+            " ".join(xvg_files),
             work_dir,
         )
 
@@ -510,7 +501,6 @@ class Relative:
 
         # First leg.
         with open("%s/bar.xvg" % work_dir) as file:
-
             # Read all of the lines into a list.
             lines = []
             for line in file:
@@ -639,12 +629,10 @@ class Relative:
 
         # First leg.
         with open("%s/mbar.txt" % work_dir) as file:
-
             # Process the MBAR data.
             for line in file:
                 # Process the overlap matrix.
                 if "#Overlap matrix" in line:
-
                     # Get the next row.
                     row = next(file)
 

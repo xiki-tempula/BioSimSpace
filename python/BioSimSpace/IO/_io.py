@@ -25,6 +25,7 @@ __author__ = "Lester Hedges"
 __email__ = "lester.hedges@gmail.com"
 
 __all__ = [
+    "expand",
     "fileFormats",
     "formatInfo",
     "readMolecules",
@@ -38,11 +39,12 @@ from collections import OrderedDict as _OrderedDict
 from glob import glob as _glob
 from io import StringIO as _StringIO
 
+import json as _json
 import os as _os
 import shlex as _shlex
+import shutil as _shutil
 import sys as _sys
 import subprocess as _subprocess
-import tempfile as _tempfile
 import warnings as _warnings
 
 # Wrap the import of PyPDB since it imports Matplotlib, which will fail if
@@ -57,6 +59,8 @@ except:
 # Flag that we've not yet raised a warning about GROMACS not being installed.
 _has_gmx_warned = False
 
+import sire as _sire
+
 from sire.legacy import Base as _SireBase
 from sire.legacy import IO as _SireIO
 from sire.legacy import Mol as _SireMol
@@ -70,6 +74,10 @@ from .._SireWrappers import Molecule as _Molecule
 from .._SireWrappers import Molecules as _Molecules
 from .._SireWrappers import System as _System
 from .. import _Utils
+
+from ._file_cache import check_cache as _check_cache
+from ._file_cache import update_cache as _update_cache
+
 
 # Context manager for capturing stdout.
 # Taken from:
@@ -109,6 +117,46 @@ for index, line in enumerate(format_info):
 
 # Delete the redundant variables.
 del format_info, index, line, format, extensions, description
+
+
+def expand(base, path, suffix=None):
+    """
+    Expand the set of paths with the supplied base.
+
+    Parameters
+    ----------
+
+    base : str
+        The base to prepend to all paths.
+
+    path : str, [str]
+        The filename (or names) that will be prepended with the base.
+
+    suffix : str
+        An optional suffix to append to all files, e.g. ".bz2".
+
+    Returns
+    -------
+    path : [str]
+        The list of expanded filenames or URLs.
+    """
+
+    if not isinstance(base, str):
+        raise TypeError("'base' must be of type 'str'")
+
+    # Convert single values to a list.
+    if isinstance(path, str):
+        path = [path]
+
+    if not isinstance(path, (list, tuple)) and not all(
+        isinstance(x, str) for x in path
+    ):
+        raise TypeError("'path' must be a list of 'str' types.")
+
+    if suffix is not None and not isinstance(suffix, str):
+        raise TypeError("'suffix' must be of type 'str'")
+
+    return _sire.expand(base, path, suffix=suffix)
 
 
 def fileFormats():
@@ -224,24 +272,21 @@ def readPDB(id, pdb4amber=False, work_dir=None, show_warnings=False, property_ma
     if work_dir and not isinstance(work_dir, str):
         raise TypeError("'work_dir' must be of type 'str'")
 
-    # Create a temporary working directory and store the directory name.
-    if work_dir is None:
-        tmp_dir = _tempfile.TemporaryDirectory()
-        work_dir = tmp_dir.name
-
-    # User specified working directory.
-    else:
-        # Use full path.
-        if work_dir[0] != "/":
-            work_dir = _os.getcwd() + "/" + work_dir
-
-        # Create the directory if it doesn't already exist.
-        if not _os.path.isdir(work_dir):
-            _os.makedirs(work_dir, exist_ok=True)
+    # Create the working directory.
+    work_dir = _Utils.WorkDir(work_dir)
 
     # Path to a PDB file.
     if _os.path.isfile(id):
         pdb_file = _os.path.abspath(id)
+
+    # This is a URL.
+    elif id.startswith(("http", "www")):
+        from sire._load import _resolve_path
+
+        try:
+            pdb_file = _resolve_path(id, directory=str(work_dir))[0]
+        except:
+            raise IOError(f"Unable to download PDB file: '{id}'")
 
     # ID from the Protein Data Bank.
     else:
@@ -295,7 +340,7 @@ def readPDB(id, pdb4amber=False, work_dir=None, show_warnings=False, property_ma
         # Run pdb4amber as a subprocess.
         proc = _subprocess.run(
             _Utils.command_split(command),
-            cwd=work_dir,
+            cwd=str(work_dir),
             shell=False,
             stdout=stdout,
             stderr=stderr,
@@ -316,7 +361,7 @@ def readPDB(id, pdb4amber=False, work_dir=None, show_warnings=False, property_ma
     )
 
 
-def readMolecules(files, show_warnings=False, property_map={}):
+def readMolecules(files, show_warnings=False, download_dir=None, property_map={}):
     """
     Read a molecular system from file.
 
@@ -324,10 +369,16 @@ def readMolecules(files, show_warnings=False, property_map={}):
     ----------
 
     files : str, [str]
-        A file name, or a list of file names.
+        A file name, or a list of file names. Note that the file names can
+        be URLs, in which case the files will be downloaded and (if necessary)
+        extracted before reading.
 
     show_warnings : bool
         Whether to show any warnings raised during parsing of the input files.
+
+    download_dir : str
+        The directory to download files to. If None, then a temporary directory
+        will be created for you.
 
     property_map : dict
         A dictionary that maps system "properties" to their user defined
@@ -359,7 +410,7 @@ def readMolecules(files, show_warnings=False, property_map={}):
     Load a molecular system from all of the files contained within a directory.
 
     >>> import BioSimSpace as BSS
-    >>> system = BSS.IO.readMolecules(BSS.IO.glob("dir/*"))
+    >>> system = BSS.IO.readMolecules("dir/*")
 
     Load a molecular system from GROMACS coordinate and topology files using
     a custom GROMACS topology directory.
@@ -378,7 +429,10 @@ def readMolecules(files, show_warnings=False, property_map={}):
 
     # Glob string to catch wildcards and convert to list.
     if isinstance(files, str):
-        files = _glob(files)
+        if not files.startswith(("http", "www")):
+            files = _glob(files)
+        else:
+            files = [files]
 
     # Check that all arguments are of type 'str'.
     if isinstance(files, (list, tuple)):
@@ -393,6 +447,14 @@ def readMolecules(files, show_warnings=False, property_map={}):
     if not isinstance(show_warnings, bool):
         raise TypeError("'show_warnings' must be of type 'bool'.")
 
+    # Validate the download directory.
+    if download_dir is not None:
+        if not isinstance(download_dir, str):
+            raise TypeError("'download_dir' must be of type 'str'")
+
+    # Create the download directory.
+    download_dir = _Utils.WorkDir(download_dir)
+
     # Validate the map.
     if not isinstance(property_map, dict):
         raise TypeError("'property_map' must be of type 'dict'")
@@ -401,18 +463,19 @@ def readMolecules(files, show_warnings=False, property_map={}):
     if _gmx_path is not None and ("GROMACS_PATH" not in property_map):
         property_map["GROMACS_PATH"] = _gmx_path
 
-    # Check that the files exist.
+    # Check that the files exist (if not a URL).
     for file in files:
-        if not _os.path.isfile(file):
+        if not file.startswith(("http", "www")) and not _os.path.isfile(file):
             raise IOError("Missing input file: '%s'" % file)
-
-    # Copy the property map.
-    pmap = property_map.copy()
-    pmap["show_warnings"] = _SireBase.wrap(show_warnings)
 
     # Try to read the files and return a molecular system.
     try:
-        system = _SireIO.MoleculeParser.read(files, pmap)
+        system = _patch_sire_load(
+            files,
+            directory=str(download_dir),
+            property_map=property_map,
+            show_warnings=show_warnings,
+        )
     except Exception as e0:
         if "There are no lead parsers!" in str(e0):
             # First check to see if the failure was due to the presence
@@ -467,7 +530,7 @@ def readMolecules(files, show_warnings=False, property_map={}):
     return _System(system)
 
 
-def saveMolecules(filebase, system, fileformat, property_map={}):
+def saveMolecules(filebase, system, fileformat, property_map={}, **kwargs):
     """
     Save a molecular system to file.
 
@@ -503,7 +566,8 @@ def saveMolecules(filebase, system, fileformat, property_map={}):
     try to save it to all supported file formats.
 
     >>> import BioSimSpace as BSS
-    >>> system = BSS.IO.readMolecules(["ala.rst7", "ala.prm7"])
+    >>> files = BSS.IO.expand(BSS.tutorialUrl(), ["ala.top", "ala.crd"], ".bz2")
+    >>> system = BSS.IO.readMolecules(files)
     >>> for format in BSS.IO.fileFormats():
     ...     try:
     ...         BSS.IO.saveMolecules("test", system, format)
@@ -515,7 +579,8 @@ def saveMolecules(filebase, system, fileformat, property_map={}):
     property along the way.
 
     >>> import BioSimSpace as BSS
-    >>> system = BSS.IO.readMolecules(["ala.rst7", "ala.prm7"], property_map={"charge" : "my-charge"})
+    >>> files = BSS.IO.expand(BSS.tutorialUrl(), ["ala.top", "ala.crd"], ".bz2")
+    >>> system = BSS.IO.readMolecules(files, property_map={"charge" : "my-charge"})
     >>> BSS.IO.saveMolecules("test", system, ["gro87", "grotop"], property_map={"charge" : "my-charge"})
     """
 
@@ -530,6 +595,10 @@ def saveMolecules(filebase, system, fileformat, property_map={}):
     # Check that the filebase is a string.
     if not isinstance(filebase, str):
         raise TypeError("'filebase' must be of type 'str'")
+
+    # Convert to absolute path.
+    if not _os.path.isabs(filebase):
+        filebase = _os.path.abspath(filebase)
 
     # Check that that the system is of the correct type.
 
@@ -596,25 +665,27 @@ def saveMolecules(filebase, system, fileformat, property_map={}):
     # Get the directory name.
     dirname = _os.path.dirname(filebase)
 
-    # If the user has passed a directory, make sure that is exists.
-    if _os.path.basename(filebase) != filebase:
-        # Create the directory if it doesn't already exist.
-        if not _os.path.isdir(dirname):
-            _os.makedirs(dirname, exist_ok=True)
-
-    # Store the current working directory.
-    dir = _os.getcwd()
-
-    # Change to the working directory for the process.
-    # This avoid problems with relative paths.
-    if dirname != "":
-        _os.chdir(dirname)
+    # Create the directory if it doesn't already exist.
+    if not _os.path.isdir(dirname):
+        _os.makedirs(dirname, exist_ok=True)
 
     # A list of the files that have been written.
     files = []
 
     # Save the system using each file format.
     for format in formats:
+        # Copy an existing file if it exists in the cache.
+        ext = _check_cache(
+            system,
+            format,
+            filebase,
+            property_map=property_map,
+            **kwargs,
+        )
+        if ext:
+            files.append(_os.path.abspath(filebase + ext))
+            continue
+
         # Add the file format to the property map.
         _property_map["fileformat"] = _SireBase.wrap(format)
 
@@ -622,7 +693,6 @@ def saveMolecules(filebase, system, fileformat, property_map={}):
         # that uses geometric combining rules. While we can write this to file
         # the information is lost on read.
         if format == "PRM7":
-
             # Get the name of the "forcefield" property.
             forcefield = _property_map.get("forcefield", "forcefield")
 
@@ -648,16 +718,16 @@ def saveMolecules(filebase, system, fileformat, property_map={}):
             # and save GROMACS files with an extension such that they can be run
             # directly by GROMACS without needing to be renamed.
             if format == "PRM7" or format == "RST7":
-                system = system.copy()
-                system._set_water_topology("AMBER", _property_map)
+                system_copy = system.copy()
+                system_copy._set_water_topology("AMBER", _property_map)
                 file = _SireIO.MoleculeParser.save(
-                    system._sire_object, filebase, _property_map
+                    system_copy._sire_object, filebase, _property_map
                 )
             elif format == "GroTop":
-                system = system.copy()
-                system._set_water_topology("GROMACS")
+                system_copy = system.copy()
+                system_copy._set_water_topology("GROMACS")
                 file = _SireIO.MoleculeParser.save(
-                    system._sire_object, filebase, _property_map
+                    system_copy._sire_object, filebase, _property_map
                 )[0]
                 new_file = file.replace("grotop", "top")
                 _os.rename(file, new_file)
@@ -680,18 +750,15 @@ def saveMolecules(filebase, system, fileformat, property_map={}):
 
             files += file
 
+            # If this is a new file, then add it to the cache.
+            _update_cache(system, format, file[0], **kwargs)
+
         except Exception as e:
-            if dirname != "":
-                _os.chdir(dir)
             msg = "Failed to save system to format: '%s'" % format
             if _isVerbose():
                 raise IOError(msg) from e
             else:
                 raise IOError(msg) from None
-
-    # Change back to the original directory.
-    if dirname != "":
-        _os.chdir(dir)
 
     # Return the list of files.
     return files
@@ -824,49 +891,62 @@ def readPerturbableSystem(top0, coords0, top1, coords1, property_map={}):
 
     # Check that the coordinate and topology files can be parsed.
 
-    # lamba = 0 coordinates.
-    try:
-        _SireIO.AmberRst7(coords0)
-    except Exception as e:
-        msg = f"Unable to read lambda=0 coordinate file: {coords0}"
-        if _isVerbose():
-            raise IOError(msg) from e
-        else:
-            raise IOError(msg) from None
+    prefixes = ("http", "www")
 
-    # lamba = 1 coordinates.
-    try:
-        _SireIO.AmberRst7(coords1)
-    except Exception as e:
-        msg = f"Unable to read lambda=1 coordinate file: {coords1}"
-        if _isVerbose():
-            raise IOError(msg) from e
-        else:
-            raise IOError(msg) from None
+    # Don't validate URLs.
+    if (
+        not top0.startswith(prefixes)
+        and not coords0.startswith(prefixes)
+        and not top1.startswith(prefixes)
+        and not coords1.startswith(prefixes)
+    ):
+        # lamba = 0 coordinates.
+        try:
+            _SireIO.AmberRst7(coords0)
+        except Exception as e:
+            msg = f"Unable to read lambda=0 coordinate file: {coords0}"
+            if _isVerbose():
+                raise IOError(msg) from e
+            else:
+                raise IOError(msg) from None
 
-    # lamba = 0 topology.
-    try:
-        parser = _SireIO.AmberPrm(top0)
-    except Exception as e:
-        msg = f"Unable to read lambda=0 topology file: {top0}"
-        if _isVerbose():
-            raise IOError(msg) from e
-        else:
-            raise IOError(msg) from None
-    if parser.isEmpty():
-        raise ValueError(f"Unable to read topology file for lamba=0 end state: {top0}")
+        # lamba = 1 coordinates.
+        try:
+            _SireIO.AmberRst7(coords1)
+        except Exception as e:
+            msg = f"Unable to read lambda=1 coordinate file: {coords1}"
+            if _isVerbose():
+                raise IOError(msg) from e
+            else:
+                raise IOError(msg) from None
 
-    # lamba = 1 topology.
-    try:
-        parser = _SireIO.AmberPrm(top1)
-    except Exception as e:
-        msg = f"Unable to read lambda=1 topology file: {top1}"
-        if _isVerbose():
-            raise IOError(msg) from e
-        else:
-            raise IOError(msg) from None
-    if parser.isEmpty():
-        raise ValueError(f"Unable to read topology file for lamba=1 end state: {top1}")
+        # lamba = 0 topology.
+        try:
+            parser = _SireIO.AmberPrm(top0)
+        except Exception as e:
+            msg = f"Unable to read lambda=0 topology file: {top0}"
+            if _isVerbose():
+                raise IOError(msg) from e
+            else:
+                raise IOError(msg) from None
+        if parser.isEmpty():
+            raise ValueError(
+                f"Unable to read topology file for lamba=0 end state: {top0}"
+            )
+
+        # lamba = 1 topology.
+        try:
+            parser = _SireIO.AmberPrm(top1)
+        except Exception as e:
+            msg = f"Unable to read lambda=1 topology file: {top1}"
+            if _isVerbose():
+                raise IOError(msg) from e
+            else:
+                raise IOError(msg) from None
+        if parser.isEmpty():
+            raise ValueError(
+                f"Unable to read topology file for lamba=1 end state: {top1}"
+            )
 
     # Try loading the two end states.
     system0 = readMolecules([coords0, top0], property_map=property_map)
@@ -947,3 +1027,81 @@ def readPerturbableSystem(top0, coords0, top1, coords1, property_map={}):
     system0.updateMolecules(mol)
 
     return system0
+
+
+def _patch_sire_load(path, *args, show_warnings=True, property_map={}, **kwargs):
+    """
+    Load the molecular system at 'path'. This can be a filename
+    of a URL. If it is a URL, then the file will be downloaded
+    to the current directory and loaded from there.
+
+    Parameters
+    ----------
+
+    path : str or list[str]
+        The filename (or names) or the URL or URLS of the molecular
+        system to load. This allows multiple paths to be input
+        as some molecular file formats split molecular information
+        across multiple files. Multiple paths can also be passed
+        as multiple arguments to this function.
+
+    log : (dict)
+        Optional dictionary that you can pass in that will be populated
+        with any error messages or warnings from the parsers as they
+        attempt to load in the molecular data. This can be helpful
+        in diagnosing why your file wasn't loaded.
+
+    show_warnings : bool
+        Whether or not to print out any warnings that are encountered
+        when loading your file(s). This is default True, and may lead
+        to noisy output. Set `show_warnings=False` to silence this output.
+
+    directory : str
+        Optional directory which will be used when creating any
+        files (e.g. as a download from a URL or which unzipping files)
+
+    Returns
+    -------
+
+    system : sire.legacy.System.System:
+        The molecules that have been loaded are returned as
+        a sire.legacy.System.System.
+    """
+
+    if type(path) is not list:
+        paths = [path]
+    else:
+        paths = path
+
+    for arg in args:
+        paths.append(arg)
+
+    if "log" in kwargs:
+        log = kwargs["log"]
+    else:
+        log = {}
+
+    if "directory" in kwargs:
+        directory = kwargs["directory"]
+    else:
+        directory = "."
+
+    if "silent" in kwargs:
+        silent = kwargs["silent"]
+    else:
+        silent = False
+
+    p = []
+
+    for i in range(0, len(paths)):
+        # resolve the paths, downloading as needed
+        p += _sire._load._resolve_path(paths[i], directory=directory, silent=silent)
+
+    paths = p
+
+    if len(paths) == 0:
+        raise IOError("No valid files specified. Nothing to load?")
+
+    s = _sire.io.load_molecules(paths, map=_sire.base.create_map(property_map))
+
+    return _sire._load._to_legacy_system(s)

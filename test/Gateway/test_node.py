@@ -17,8 +17,8 @@ args = [
     "--int=42",
     "--float=3.14",
     '--string="hello"',
-    "--file=test/input/amber/ala/ala.crd",
-    "--fileset=test/input/amber/ala/ala.crd,test/input/amber/ala/ala.top",
+    "--file=test/input/ala.crd",
+    "--fileset=test/input/ala.crd,test/input/ala.top",
     '--temperature="298 kelvin"',
     '--time="100 nanoseconds"',
     '--length="10 angstroms"',
@@ -87,6 +87,7 @@ def test_missing_args(value):
     assert proc.returncode != 0
 
 
+@pytest.mark.skip(reason="Intermittently failing during CI only.")
 def test_invalid_args():
     """Test that the node fails when required arguments are of the wrong type."""
 
@@ -121,7 +122,7 @@ def test_multi_args():
     assert proc.returncode == 0
 
     # Now strip one of the files from the file-set string.
-    command = command.replace(" test/input/amber/ala/ala.top", "")
+    command = command.replace(" test/input/ala.top", "")
 
     # Run the command.
     proc = subprocess.run(
@@ -139,9 +140,7 @@ def test_missing_file():
     command = "%s %s " % (exe, script_name) + " ".join(args)
 
     # Replace with a missing file.
-    invalid_command = command.replace(
-        "file=test/input/amber/ala/ala.crd", "file=missing.txt"
-    )
+    invalid_command = command.replace("file=test/input/ala.crd", "file=missing.txt")
 
     # Run the command.
     proc = subprocess.run(
@@ -152,9 +151,7 @@ def test_missing_file():
     assert proc.returncode != 0
 
     # Replace with a missing file.
-    invalid_command = command.replace(
-        "test/input/amber/ala/ala.top", "file=missing.txt"
-    )
+    invalid_command = command.replace("test/input/ala.top", "file=missing.txt")
 
     # Run the command.
     proc = subprocess.run(

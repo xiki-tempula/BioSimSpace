@@ -138,7 +138,7 @@ class ConfigFactory:
         if timestep >= 0.004:
             no_shake_mask = ""
         else:
-            no_shake_mask = _amber_mask_from_indices(mcs0_indices + mcs1_indices)
+            no_shake_mask = _amber_mask_from_indices(ti0_indices + ti1_indices)
 
         # Create an option dict with amber masks generated from the above indices.
         option_dict = {
@@ -224,12 +224,12 @@ class ConfigFactory:
             protocol_dict["ntf"] = 2  # Don't calculate forces for constrained bonds.
 
         # PBC.
-        if not self._has_box or not self._has_water:
-            protocol_dict["ntb"] = 0  # No periodic box.
-            protocol_dict["cut"] = "999."  # Non-bonded cut-off.
-        else:
+        if self._has_box:
             protocol_dict["cut"] = "8.0"  # Non-bonded cut-off.
             protocol_dict["iwrap"] = 1  # Wrap the coordinates.
+        else:
+            protocol_dict["ntb"] = 0  # No periodic box.
+            protocol_dict["cut"] = "999."  # Non-bonded cut-off.
 
         # Restraints.
         if isinstance(self.protocol, _Protocol._PositionRestraintMixin):
@@ -261,7 +261,6 @@ class ConfigFactory:
 
                     # The restraintmask cannot be more than 256 characters.
                     if len(restraint_mask) > 256:
-
                         # AMBER has a limit on the length of the restraintmask
                         # so it's easy to overflow if we are matching by index
                         # on a large protein. As such, handle "backbone" and
@@ -306,11 +305,15 @@ class ConfigFactory:
                     _warnings.warn(
                         "Cannot use a barostat for a vacuum or non-periodic simulation"
                     )
+            else:
+                protocol_dict["ntb"] = 1  # constant volume.
 
         # Temperature control.
         if not isinstance(self.protocol, _Protocol.Minimisation):
             protocol_dict["ntt"] = 3  # Langevin dynamics.
-            protocol_dict["gamma_ln"] = 2  # Collision frequency (ps).
+            protocol_dict["gamma_ln"] = "{:.5f}".format(
+                1 / self.protocol.getTauT().picoseconds().value()
+            )  # Collision frequency (ps^-1).
             if isinstance(self.protocol, _Protocol.Equilibration):
                 temp0 = self.protocol.getStartTemperature().kelvin().value()
                 temp1 = self.protocol.getEndTemperature().kelvin().value()
@@ -336,12 +339,15 @@ class ConfigFactory:
             protocol_dict["icfe"] = 1  # Free energy mode.
             protocol_dict["ifsc"] = 1  # Use softcore potentials.
             protocol_dict["ntf"] = 1  # Remove SHAKE constraints.
-            protocol = [str(x) for x in self.protocol.getLambdaValues()]
+            lambda_values = self.protocol.getLambdaValues(type="dataframe")
+            protocol = [f"{lam:.5f}" for lam in lambda_values["fep"]]
             protocol_dict["mbar_states"] = len(protocol)  # Number of lambda values.
             protocol_dict["mbar_lambda"] = ", ".join(protocol)  # Lambda values.
-            protocol_dict[
-                "clambda"
-            ] = self.protocol.getLambda()  # Current lambda value.
+            Lambda = self.protocol.getLambda(type="series")
+            protocol_dict["clambda"] = "{:.5f}".format(
+                Lambda["fep"]
+            )  # Current lambda value.
+
             if isinstance(self.protocol, _Protocol.Production):
                 protocol_dict["ifmbar"] = 1  # Calculate MBAR energies.
                 protocol_dict["logdvdl"] = 1  # Output dVdl
@@ -442,9 +448,11 @@ class ConfigFactory:
                 # Don't use barostat for vacuum simulations.
                 if self._has_box and self._has_water:
                     protocol_dict["pcoupl"] = "c-rescale"  # Barostat type.
-                    protocol_dict[
-                        "tau-p"
-                    ] = 1  # 1ps time constant for pressure coupling.
+                    # Do the MC move every 100 steps to be the same as AMBER.
+                    protocol_dict["nstpcouple"] = 100
+                    # 4ps time constant for pressure coupling.
+                    # As the tau-p has to be 10 times larger than nstpcouple * dt (4 fs)
+                    protocol_dict["tau-p"] = 4
                     protocol_dict[
                         "ref-p"
                     ] = f"{self.protocol.getPressure().bar().value():.5f}"  # Pressure in bar.
@@ -463,7 +471,9 @@ class ConfigFactory:
             protocol_dict[
                 "tc-grps"
             ] = "system"  # A single temperature group for the entire system.
-            protocol_dict["tau-t"] = 2  # Collision frequency (ps).
+            protocol_dict["tau-t"] = "{:.5f}".format(
+                self.protocol.getTauT().picoseconds().value()
+            )  # Collision frequency (ps).
 
             if isinstance(self.protocol, _Protocol.Equilibration):
                 if self.protocol.isConstantTemp():

@@ -57,6 +57,7 @@ from .._Exceptions import MissingSoftwareError as _MissingSoftwareError
 from .._SireWrappers import System as _System
 from ..Types._type import Type as _Type
 
+from .. import IO as _IO
 from .. import Protocol as _Protocol
 from .. import Trajectory as _Trajectory
 from .. import Units as _Units
@@ -92,7 +93,7 @@ class _Watcher:
 
         # Setup the event handler and observer.
         event_handler = _Handler(self._process)
-        self._observer.schedule(event_handler, self._process._work_dir)
+        self._observer.schedule(event_handler, self._process.workDir())
         self._observer.daemon = True
         self._observer.start()
 
@@ -301,7 +302,7 @@ class Amber(_process.Process):
 
         # Create the reference file
         if self._ref_system is not None and self._protocol.getRestraint() is not None:
-            self._write_system(self._ref_system, coord_file=self._ref_file)
+            self._write_system(self._ref_system, ref_file=self._ref_file)
         else:
             _shutil.copy(self._rst_file, self._ref_file)
 
@@ -319,7 +320,7 @@ class Amber(_process.Process):
         # Return the list of input files.
         return self._input_files
 
-    def _write_system(self, system, coord_file=None, topol_file=None):
+    def _write_system(self, system, coord_file=None, topol_file=None, ref_file=None):
         """Validates an input system and makes some internal modifications to it,
         if needed, before writing it out to a coordinate and/or a topology file.
 
@@ -334,6 +335,9 @@ class Amber(_process.Process):
 
         topol_file : str or None
             The topology file to which to write out the system.
+
+        ref_file : str or None
+            The coordinate file for the reference system used for position restraints.
 
         Returns
         -------
@@ -364,8 +368,20 @@ class Amber(_process.Process):
         # RST file (coordinates).
         if coord_file is not None:
             try:
-                rst = _SireIO.AmberRst7(system._sire_object, self._property_map)
-                rst.writeToFile(coord_file)
+                file = _os.path.splitext(coord_file)[0]
+                _IO.saveMolecules(file, system, "rst7", property_map=self._property_map)
+            except Exception as e:
+                msg = "Failed to write system to 'RST7' format."
+                if _isVerbose():
+                    raise IOError(msg) from e
+                else:
+                    raise IOError(msg) from None
+
+        # RST file (reference for position restraints).
+        if ref_file is not None:
+            try:
+                file = _os.path.splitext(ref_file)[0]
+                _IO.saveMolecules(file, system, "rst7", property_map=self._property_map)
             except Exception as e:
                 msg = "Failed to write system to 'RST7' format."
                 if _isVerbose():
@@ -376,8 +392,8 @@ class Amber(_process.Process):
         # PRM file (topology).
         if topol_file is not None:
             try:
-                prm = _SireIO.AmberPrm(system._sire_object, self._property_map)
-                prm.writeToFile(self._top_file)
+                file = _os.path.splitext(topol_file)[0]
+                _IO.saveMolecules(file, system, "prm7", property_map=self._property_map)
             except Exception as e:
                 msg = "Failed to write system to 'PRM7' format."
                 if _isVerbose():
@@ -421,7 +437,7 @@ class Amber(_process.Process):
             config_options["plumedfile"] = "plumed.dat"
 
             # Create the PLUMED input file and copy auxiliary files to the working directory.
-            self._plumed = _Plumed(self._work_dir)
+            self._plumed = _Plumed(str(self._work_dir))
             plumed_config, auxiliary_files = self._plumed.createConfig(
                 self._system, self._protocol, self._property_map
             )
@@ -576,7 +592,6 @@ class Amber(_process.Process):
 
         # Skip if the user has passed a custom protocol.
         if not isinstance(self._protocol, _Protocol.Custom):
-
             # Append a reference file if this a restrained simulation.
             if isinstance(self._protocol, _Protocol._PositionRestraintMixin):
                 if self._protocol.getRestraint() is not None:
@@ -611,13 +626,11 @@ class Amber(_process.Process):
 
         # Run the process in the working directory.
         with _Utils.cd(self._work_dir):
-
             # Create the arguments string list.
             args = self.getArgStringList()
 
             # Write the command-line process to a README.txt file.
             with open("README.txt", "w") as file:
-
                 # Set the command-line string.
                 self._command = "%s " % self._exe + self.getArgString()
 
@@ -1783,19 +1796,14 @@ class Amber(_process.Process):
 
         # Open the file for reading.
         with open(self._nrg_file, "r") as file:
-
             # Loop over all of the lines.
             for line in file:
-
                 # Skip empty lines and summary reports.
                 if len(line) > 0 and line[0] != "|":
-
                     # The output format is different for minimisation protocols.
                     if isinstance(self._protocol, _Protocol.Minimisation):
-
                         # No equals sign in the line.
                         if "=" not in line:
-
                             # Split the line using whitespace.
                             data = line.upper().split()
 
@@ -1807,7 +1815,6 @@ class Amber(_process.Process):
 
                         # Process the header record.
                         if is_header:
-
                             # Split the line using whitespace.
                             data = line.upper().split()
 
@@ -1836,7 +1843,6 @@ class Amber(_process.Process):
 
                     # Append each record to the dictionary.
                     for key, value in records:
-
                         # Strip whitespace from the record key.
                         key = key.strip()
 
@@ -1871,7 +1877,7 @@ class Amber(_process.Process):
         Parameters
         ----------
 
-        max_time: :class:`Time <BioSimSpace.Types.Time>`, int, float
+        max_time : :class:`Time <BioSimSpace.Types.Time>`, int, float
             The maximum time to wait (in minutes).
         """
 

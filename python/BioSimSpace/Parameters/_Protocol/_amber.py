@@ -33,6 +33,7 @@ __all__ = ["AmberProtein", "GAFF"]
 # To override any protocols, just implement a custom "run" method in any
 # of the classes.
 
+import glob as _glob
 import os as _os
 import queue as _queue
 import subprocess as _subprocess
@@ -242,10 +243,11 @@ class AmberProtein(_protocol.Protocol):
         Parameters
         ----------
 
-        molecule : BioSimSpace._SireWrappers.Molecule
-            The molecule to apply the parameterisation protocol to.
+        molecule : :class:`Molecule <BioSimSpace._SireWrappers.Molecule>`, str
+            The molecule to parameterise, either as a Molecule object or SMILES
+            string.
 
-        work_dir : str
+        work_dir : :class:`WorkDir <BioSimSpace._Utils.WorkDir>`
             The working directory.
 
         queue : queue.Queue
@@ -263,8 +265,8 @@ class AmberProtein(_protocol.Protocol):
                 "'molecule' must be of type 'BioSimSpace._SireWrappers.Molecule' or 'str'"
             )
 
-        if work_dir is not None and not isinstance(work_dir, str):
-            raise TypeError("'work_dir' must be of type 'str'")
+        if work_dir is not None and not isinstance(work_dir, _Utils.WorkDir):
+            raise TypeError("'work_dir' must be of type 'BioSimSpace._Utils.WorkDir'")
 
         if queue is not None and not isinstance(queue, _queue.Queue):
             raise TypeError("'queue' must be of type 'queue.Queue'")
@@ -293,13 +295,13 @@ class AmberProtein(_protocol.Protocol):
         # First, try parameterise using tLEaP.
         if self._tleap:
             if _tleap_exe is not None:
-                output = self._run_tleap(molecule, work_dir)
+                output = self._run_tleap(molecule, str(work_dir))
                 if not is_smiles:
                     new_mol._ion_water_model = self._water_model
             # Otherwise, try using pdb2gmx.
             elif self._pdb2gmx:
                 if _gmx_exe is not None:
-                    output = self._run_pdb2gmx(molecule, work_dir)
+                    output = self._run_pdb2gmx(molecule, str(work_dir))
                 else:
                     raise _MissingSoftwareError(
                         "Cannot parameterise. Missing AmberTools and GROMACS."
@@ -308,7 +310,7 @@ class AmberProtein(_protocol.Protocol):
         # Parameterise using pdb2gmx.
         elif self._pdb2gmx:
             if _gmx_exe is not None:
-                output = self._run_pdb2gmx(molecule, work_dir)
+                output = self._run_pdb2gmx(molecule, str(work_dir))
             else:
                 raise _MissingSoftwareError(
                     "Cannot use pdb2gmx since GROMACS is not installed!"
@@ -786,7 +788,7 @@ class GAFF(_protocol.Protocol):
             The method to use when calculating atomic charges:
             "RESP", "CM2", "MUL", "BCC", "ESP", "GAS"
 
-        net_charge: int
+        net_charge : int
             The net charge on the molecule.
 
         property_map : dict
@@ -855,7 +857,7 @@ class GAFF(_protocol.Protocol):
             The molecule to parameterise, either as a Molecule object or SMILES
             string.
 
-        work_dir : str
+        work_dir : :class:`WorkDir <BioSimSpace._Utils.WorkDir>`
             The working directory.
 
         queue : queue.Queue
@@ -873,8 +875,8 @@ class GAFF(_protocol.Protocol):
                 "'molecule' must be of type 'BioSimSpace._SireWrappers.Molecule' or 'str'"
             )
 
-        if work_dir is not None and not isinstance(work_dir, str):
-            raise TypeError("'work_dir' must be of type 'str'")
+        if work_dir is not None and not isinstance(work_dir, _Utils.WorkDir):
+            raise TypeError("'work_dir' must be of type 'BioSimSpace._Utils.WorkDir'")
 
         if queue is not None and not isinstance(queue, _queue.Queue):
             raise TypeError("'queue' must be of type 'queue.Queue'")
@@ -890,7 +892,7 @@ class GAFF(_protocol.Protocol):
         if isinstance(molecule, str):
             is_smiles = True
             try:
-                new_mol = _smiles_to_molecule(molecule, work_dir)
+                new_mol = _smiles_to_molecule(molecule, str(work_dir))
             except Exception as e:
                 msg = "Unable to convert SMILES to Molecule using Open Force Field."
                 if _isVerbose():
@@ -993,7 +995,7 @@ class GAFF(_protocol.Protocol):
         # Run Antechamber as a subprocess.
         proc = _subprocess.run(
             _Utils.command_split(command),
-            cwd=work_dir,
+            cwd=str(work_dir),
             shell=False,
             stdout=stdout,
             stderr=stderr,
@@ -1004,7 +1006,6 @@ class GAFF(_protocol.Protocol):
         # Antechamber doesn't return sensible error codes, so we need to check that
         # the expected output was generated.
         if _os.path.isfile(prefix + "antechamber.mol2"):
-
             # Run parmchk to check for missing parameters.
             command = (
                 "%s -s %d -i antechamber.mol2 -f mol2 " + "-o antechamber.frcmod"
@@ -1022,7 +1023,7 @@ class GAFF(_protocol.Protocol):
             # Run parmchk as a subprocess.
             proc = _subprocess.run(
                 _Utils.command_split(command),
-                cwd=work_dir,
+                cwd=str(work_dir),
                 shell=False,
                 stdout=stdout,
                 stderr=stderr,
@@ -1032,7 +1033,6 @@ class GAFF(_protocol.Protocol):
 
             # The frcmod file was created.
             if _os.path.isfile(prefix + "antechamber.frcmod"):
-
                 # Now call tLEaP using the partially parameterised molecule and the frcmod file.
                 # tLEap will run in the same working directory, using the Mol2 file generated by
                 # Antechamber.
@@ -1066,7 +1066,7 @@ class GAFF(_protocol.Protocol):
                 # Run tLEaP as a subprocess.
                 proc = _subprocess.run(
                     _Utils.command_split(command),
-                    cwd=work_dir,
+                    cwd=str(work_dir),
                     shell=False,
                     stdout=stdout,
                     stderr=stderr,
@@ -1172,16 +1172,16 @@ def _find_force_field(forcefield):
     is_old = False
 
     # Search for a compatible force field file.
-    ff = _IO.glob("%s/*.%s" % (_cmd_dir, forcefield))
+    ff = _glob.glob("%s/*.%s" % (_cmd_dir, forcefield))
 
     # Search the old force fields. First try a specific match.
     if len(ff) == 0:
-        ff = _IO.glob("%s/oldff/leaprc.%s" % (_cmd_dir, forcefield))
+        ff = _glob.glob("%s/oldff/leaprc.%s" % (_cmd_dir, forcefield))
         is_old = True
 
         # No matches, try globbing all files with matching extension.
         if len(ff) == 0:
-            ff = _IO.glob("%s/oldff/*.%s" % (_cmd_dir, forcefield))
+            ff = _glob.glob("%s/oldff/*.%s" % (_cmd_dir, forcefield))
 
     # No force field found!
     if len(ff) == 0:

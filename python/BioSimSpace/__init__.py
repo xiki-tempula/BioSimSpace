@@ -34,6 +34,7 @@ __email__ = "lester.hedges@gmail.com"
 __all__ = [
     "Align",
     "Box",
+    "Convert",
     "FreeEnergy",
     "Gateway",
     "IO",
@@ -121,12 +122,17 @@ def setVerbose(verbose):
     _is_verbose = verbose
 
 
+def tutorialUrl():
+    """Return the base URL for example files used in the tests and tutorials."""
+    return "https://biosimspace.openbiosim.org/m"
+
+
 def _isVerbose():
     """
     Whether verbose error messages are active.
 
     Returns
-    ------
+    -------
 
     is_verbose : bool
         Whether verbose error messages are active.
@@ -181,7 +187,6 @@ _gmx_version = None
 
 # Try using the GROMACS exe to get the version and data directory.
 if _gmx_exe is not None:
-
     import shlex as _shlex
     import subprocess as _subprocess
 
@@ -200,10 +205,10 @@ if _gmx_exe is not None:
     )
 
     del _command
+    del command_split
 
     # Get the data prefix.
     if _proc.returncode == 0:
-
         for _line in _proc.stdout.split("\n"):
             # Extract the "Data prefix" from the output.
             if "Data prefix" in _line:
@@ -226,6 +231,7 @@ if _gmx_exe is not None:
 
 from . import Align
 from . import Box
+from . import Convert
 from . import FreeEnergy
 from . import Gateway
 from . import IO
@@ -245,3 +251,11 @@ from ._version import get_versions
 
 __version__ = get_versions()["version"]
 del get_versions
+
+import logging as _logging
+
+for _name, _logger in _logging.root.manager.loggerDict.items():
+    _logger.disabled = True
+del _logger
+del _logging
+del _name

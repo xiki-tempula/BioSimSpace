@@ -55,6 +55,7 @@ authors = (
 
 _installed_list = None
 
+
 # Function to check if a conda dependency has been installed
 def is_installed(dep: str, conda: str):
     global _installed_list
@@ -81,8 +82,8 @@ try:
         cmdclass=versioneer.get_cmdclass(),
         description="BioSimSpace: Making biomolecular simulation a breeze.",
         author=authors,
-        url="https://github.com/michellab/BioSimSpace",
-        license="GPLv2",
+        url="https://github.com/openbiosim/biosimspace",
+        license="GPLv3",
         packages=find_packages(),
         include_package_data=True,
         zip_safe=False,
@@ -107,22 +108,26 @@ finally:
 
         # Create a list of the conda dependencies.
         conda_deps = [
+            "alchemlyb<2",  # known not available on aarch64
             "configargparse",
-            "pygtail",
-            "pyyaml",
-            "watchdog",
-            "pydot",
-            "networkx",
-            "nglview",
             "ipywidgets<8",
-            "py3dmol",
-            "pypdb",
-            "rdkit",
-            "parmed",
+            "kcombu_bss",
             "lomap2",
             "mdtraj",  # known not available on aarch64
             "mdanalysis",  # known not available on aarch64
-            "openff-toolkit",  # known not available on aarch64
+            "networkx",
+            "nglview",
+            "openff-interchange-base",
+            "openff-toolkit-base",
+            "parmed",
+            "py3dmol",
+            "pydot",
+            "pygtail",
+            "pypdb",
+            "pyyaml",
+            "rdkit",
+            "sire",
+            "watchdog",
         ]
 
         # Don't try to install things that are already installed...
@@ -141,6 +146,14 @@ finally:
             real_conda_exe = os.path.join(bin_dir, "conda")
 
             if not os.path.exists(conda_exe):
+                # This could be in an environment
+                conda_exe = os.path.join(bin_dir, "..", "..", "..", "bin", "mamba")
+                real_conda_exe = os.path.join(bin_dir, "..", "..", "..", "bin", "conda")
+
+                if not os.path.exists(conda_exe):
+                    if not os.path.exists(real_conda_exe):
+                        real_conda_exe = os.path.join(bin_dir, "conda")
+
                 conda_exe = real_conda_exe
 
         for dep in conda_deps:
@@ -156,6 +169,13 @@ finally:
 
         # Need to not use posix rules on windows with shlex.split, or path separator is escaped
         posix = sys.platform != "win32"
+
+        print("Adding openbiosim channel")
+        command = (
+            "%s config --system --prepend channels openbiosim/label/dev"
+            % real_conda_exe
+        )
+        print(command)
 
         print("Adding conda-forge channel")
         command = "%s config --system --prepend channels conda-forge" % real_conda_exe
@@ -247,25 +267,27 @@ finally:
             % bin_dir
         )
         subprocess.run(
-            shlex.split(command, posix=posix), shell=False, stdout=stdout, stderr=stderr
+            shlex.split(command, posix=posix),
+            shell=False,
+            stdout=stdout,
+            stderr=stderr,
         )
         command = "%s/jupyter-nbextension enable nglview --py --sys-prefix" % bin_dir
         subprocess.run(
-            shlex.split(command, posix=posix), shell=False, stdout=stdout, stderr=stderr
+            shlex.split(command, posix=posix),
+            shell=False,
+            stdout=stdout,
+            stderr=stderr,
         )
 
         print("Cleaning conda environment")
         command = "%s clean --all --yes --quiet" % conda_exe
         subprocess.run(
-            shlex.split(command, posix=posix), shell=False, stdout=stdout, stderr=stderr
+            shlex.split(command, posix=posix),
+            shell=False,
+            stdout=stdout,
+            stderr=stderr,
         )
-
-        # We can't install BioSimSpace here because it confuses the Sire old/new/mixed API
-        # try:
-        #    import BioSimSpace
-        # except:
-        #    print("\nPossible installation issues.")
-        #    sys.exit()
 
         print("\nDone!")
 
@@ -277,4 +299,3 @@ finally:
         print("AMBER:   http://ambermd.org")
         print("GROMACS: http://www.gromacs.org")
         print("NAMD:    http://www.ks.uiuc.edu/Research/namd")
-        print("FKCOMBU: https://pdbj.org/kcombu")

@@ -3,11 +3,14 @@ import BioSimSpace.Sandpit.Exscientia as BSS
 import math
 import pytest
 
+# Store the tutorial URL.
+url = BSS.tutorialUrl()
 
-@pytest.fixture
-def system(scope="session"):
+
+@pytest.fixture(scope="session")
+def system():
     """Re-use the same molecuar system for each test."""
-    return BSS.IO.readMolecules("test/input/amber/ala/*")
+    return BSS.IO.readMolecules(["test/input/ala.top", "test/input/ala.crd"])
 
 
 # Parameterise the function with a set of molecule indices.
@@ -164,13 +167,14 @@ def test_get_atom(system):
     assert system.getAtom(1883) == system[-10].getAtoms()[1]
 
     # Remove some molecules from the system.
-    system.removeMolecules([system[0], system[2], system[-2]])
+    system2 = system.copy()
+    system2.removeMolecules([system[0], system[2], system[-2]])
 
     # Check that the assertions still hold on the modified system,
     # making sure we map to the molecules in their new positions.
-    assert system.getAtom(0) == system[0].getAtoms()[0]
-    assert system.getAtom(22) == system[7].getAtoms()[1]
-    assert system.getAtom(1883) == system[-1].getAtoms()[-1]
+    assert system2.getAtom(0) == system2[0].getAtoms()[0]
+    assert system2.getAtom(22) == system2[7].getAtoms()[1]
+    assert system2.getAtom(1883) == system2[-1].getAtoms()[-1]
 
 
 def test_get_residue(system):
@@ -319,3 +323,36 @@ def test_molecule_replace(system):
         assert num0 == num1
     for num0, num1 in zip(mol_nums0[4:], mol_nums1[4:]):
         assert num0 == num1
+
+
+def test_isSame(system):
+    # Make sure that the isSame method works correctly.
+
+    # Make a copy of the system.
+    other = system.copy()
+
+    # Assert they are the same, making sure it is invariant to the order.
+    assert system.isSame(other)
+    assert other.isSame(system)
+
+    # Translate the other system.
+    other.translate(3 * [BSS.Units.Length.angstrom])
+
+    # Assert that they are different.
+    assert not system.isSame(other)
+    assert not other.isSame(system)
+
+    # Assert that they are the same, apart from their coordinates.
+    assert system.isSame(other, excluded_properties=["coordinates"])
+    assert other.isSame(system, excluded_properties=["coordinates"])
+
+    # Now delete a property.
+    other._sire_object.removeProperty("space")
+
+    # Assert that they are different.
+    assert not system.isSame(other, excluded_properties=["coordinates"])
+    assert not other.isSame(system, excluded_properties=["coordinates"])
+
+    # Assert that they are the same, apart from their coordinates and space.
+    assert system.isSame(other, excluded_properties=["coordinates", "space"])
+    assert other.isSame(system, excluded_properties=["coordinates", "space"])

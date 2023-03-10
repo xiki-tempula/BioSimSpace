@@ -31,7 +31,6 @@ import re as _re
 import subprocess as _subprocess
 import shlex as _shlex
 import sys as _sys
-import tempfile as _tempfile
 import warnings as _warnings
 
 from sire.legacy import Base as _SireBase
@@ -873,10 +872,8 @@ def _solvate(
             molecule.removeWaterMolecules()
             molecule = molecule + waters
 
-    # Create a temporary working directory and store the directory name.
-    if work_dir is None:
-        tmp_dir = _tempfile.TemporaryDirectory()
-        work_dir = tmp_dir.name
+    # Create the working directory.
+    work_dir = _Utils.WorkDir(work_dir)
 
     # Write to 6dp, unless precision is specified by use.
     _property_map = property_map.copy()
@@ -885,7 +882,6 @@ def _solvate(
 
     # Run the solvation in the working directory.
     with _Utils.cd(work_dir):
-
         # First, generate a box file corresponding to the requested geometry.
         if molecule is not None:
             # Write the molecule/system to a GRO files.
@@ -1043,7 +1039,6 @@ def _solvate(
 
         # Now we add ions to the system and neutralise the charge.
         if ion_conc > 0 or is_neutral:
-
             try:
                 # Write the molecule + water system to file.
                 _IO.saveMolecules(

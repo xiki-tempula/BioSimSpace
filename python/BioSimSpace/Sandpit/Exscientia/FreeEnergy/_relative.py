@@ -36,7 +36,6 @@ import os as _os
 import re as _re
 import shutil as _shutil
 import subprocess as _subprocess
-import tempfile as _tempfile
 import warnings as _warnings
 import zipfile as _zipfile
 
@@ -139,7 +138,7 @@ class Relative:
             The working directory for the free-energy perturbation
             simulation.
 
-        engine: str
+        engine : str
             The molecular dynamics engine used to run the simulation. Available
             options are "AMBER", "GROMACS", or "SOMD". If this argument is omitted
             then BioSimSpace will choose an appropriate engine for you.
@@ -147,7 +146,7 @@ class Relative:
         gpu_support : bool
             Whether the engine must have GPU support.
 
-        setup_only: bool
+        setup_only : bool
             Whether to only support simulation setup. If True, then no
             simulation processes objects will be created, only the directory
             hierarchy and input files to run a simulation externally. This
@@ -212,22 +211,13 @@ class Relative:
         else:
             self._setup_only = setup_only
 
-        # Create a temporary working directory and store the directory name.
-        if work_dir is None:
-            if setup_only:
-                raise ValueError(
-                    "A 'work_dir' must be specified when 'setup_only' is True!"
-                )
-            self._tmp_dir = _tempfile.TemporaryDirectory()
-            self._work_dir = self._tmp_dir.name
+        if work_dir is None and setup_only:
+            raise ValueError(
+                "A 'work_dir' must be specified when 'setup_only' is True!"
+            )
 
-        # User specified working directory.
-        else:
-            self._work_dir = work_dir
-
-            # Create the directory if it doesn't already exist.
-            if not _os.path.isdir(work_dir):
-                _os.makedirs(work_dir, exist_ok=True)
+        # Create the working directory.
+        self._work_dir = _Utils.WorkDir(work_dir)
 
         # Validate the user specified molecular dynamics engine.
         self._exe = None
@@ -241,7 +231,7 @@ class Relative:
             # Check that the engine is supported.
             if engine not in self._engines:
                 raise ValueError(
-                    "Unsupported molecular dynamics engine '%s'. "
+                    f"Unsupported molecular dynamics engine {engine}. "
                     "Supported engines are: %r." % ", ".join(self._engines)
                 )
 
@@ -408,7 +398,7 @@ class Relative:
         work_dir : str
             The path of the working directory.
         """
-        return self._work_dir
+        return str(self._work_dir)
 
     def getData(self, name="data", file_link=False, work_dir=None):
         """
@@ -587,7 +577,7 @@ class Relative:
                 "'protocol' must be of type 'BioSimSpace.Protocol.Production'"
             )
         return Relative.analyse(
-            self._work_dir, self._estimator, temperature=temperature
+            str(self._work_dir), self._estimator, temperature=temperature
         )
 
     @staticmethod
@@ -601,7 +591,7 @@ class Relative:
         Parameters
         ----------
 
-        engine: str
+        engine : str
             The molecular dynamics engine used to run the simulation. Available
             options are "AMBER", "GROMACS".
 
@@ -667,7 +657,6 @@ class Relative:
         for lambda_, mbar_value, mbar_error in zip(
             delta_f_.index, delta_f_.iloc[0, :], d_delta_f_.iloc[0, :]
         ):
-
             # Append the data.
             data.append(
                 (

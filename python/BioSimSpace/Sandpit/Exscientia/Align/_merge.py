@@ -983,7 +983,6 @@ def merge(
 
                 # The connectivity has changed.
                 if c0.connectionType(idx, idy) != conn.connectionType(idx_map, idy_map):
-
                     # The connectivity changed for an unknown reason.
                     if not (is_ring_broken or is_ring_size_change) and not force:
                         raise _IncompatibleError(
@@ -1040,7 +1039,6 @@ def merge(
 
                 # The connectivity has changed.
                 if c1.connectionType(idx, idy) != conn.connectionType(idx_map, idy_map):
-
                     # The connectivity changed for an unknown reason.
                     if not (is_ring_broken or is_ring_size_change) and not force:
                         raise _IncompatibleError(

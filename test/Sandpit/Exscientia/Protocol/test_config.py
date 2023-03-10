@@ -2,19 +2,54 @@ import pandas as pd
 import pytest
 
 import BioSimSpace.Sandpit.Exscientia as BSS
+from BioSimSpace.Sandpit.Exscientia.Align._decouple import decouple
 from BioSimSpace.Sandpit.Exscientia.Protocol import (
     ConfigFactory,
+    Equilibration,
+    Production,
     FreeEnergyMinimisation,
     FreeEnergyEquilibration,
+    FreeEnergy,
 )
-from BioSimSpace.Sandpit.Exscientia.Align._decouple import decouple
+from BioSimSpace.Sandpit.Exscientia._Utils import _try_import, _have_imported
+
+# Make sure GROMACS is installed.
+has_gromacs = BSS._gmx_exe is not None
+
+# Make sure antechamber is installed.
+has_antechamber = BSS.Parameters._Protocol._amber._antechamber_exe is not None
+
+# Make sure openff is installed.
+_openff = _try_import("openff")
+has_openff = _have_imported(_openff)
+
+# Store the tutorial URL.
+url = BSS.tutorialUrl()
+
+
+class TestAmber:
+    @pytest.fixture(scope="class")
+    def system(self):
+        m0 = BSS.IO.readMolecules(
+            [f"{url}/CAT-13c.prm7.bz2", f"{url}/CAT-13c.rst7.bz2"]
+        ).getMolecule(0)
+        return m0.toSystem()
+
+    def test_NVT(self, system):
+        config = ConfigFactory(system, Equilibration(pressure=None))
+        res = [x.strip().strip(",") for x in config.generateAmberConfig()]
+        assert "ntb=1" in res
 
 
 class TestAmberRBFE:
     @pytest.fixture(scope="class")
     def system(self):
-        m0 = BSS.IO.readMolecules("test/input/ligands/CAT-13c*").getMolecule(0)
-        m1 = BSS.IO.readMolecules("test/input/ligands/CAT-13a*").getMolecule(0)
+        m0 = BSS.IO.readMolecules(
+            [f"{url}/CAT-13c.prm7.bz2", f"{url}/CAT-13c.rst7.bz2"]
+        ).getMolecule(0)
+        m1 = BSS.IO.readMolecules(
+            [f"{url}/CAT-13a.prm7.bz2", f"{url}/CAT-13a.rst7.bz2"]
+        ).getMolecule(0)
         atom_mapping = BSS.Align.matchAtoms(m0, m1)
         m0 = BSS.Align.rmsdAlign(m0, m1, atom_mapping)
         merged = BSS.Align.merge(m0, m1)
@@ -39,21 +74,39 @@ class TestAmberRBFE:
         expected_res = {"ntr=1", 'restraintmask="@1,25,46"', "restraint_wt=4.3"}
         assert expected_res.issubset(res)
 
-
-# Make sure GROMACS is installed.
-has_gromacs = BSS._gmx_exe is not None
+    @pytest.mark.parametrize(
+        "protocol", [Equilibration, Production, FreeEnergyEquilibration, FreeEnergy]
+    )
+    def test_tau_t(self, system, protocol):
+        config = ConfigFactory(system, protocol(tau_t=BSS.Types.Time(2, "picosecond")))
+        res = [x.strip().strip(",") for x in config.generateAmberConfig()]
+        expected_res = {"gamma_ln=0.50000"}
+        assert expected_res.issubset(res)
 
 
 class TestGromacsRBFE:
     @staticmethod
     @pytest.fixture(scope="class")
     def system():
-        m0 = BSS.IO.readMolecules("test/input/ligands/CAT-13a*").getMolecule(0)
-        m1 = BSS.IO.readMolecules("test/input/ligands/CAT-13c*").getMolecule(0)
+        m0 = BSS.IO.readMolecules(
+            [f"{url}/CAT-13a.prm7.bz2", f"{url}/CAT-13a.rst7.bz2"]
+        ).getMolecule(0)
+        m1 = BSS.IO.readMolecules(
+            [f"{url}/CAT-13c.prm7.bz2", f"{url}/CAT-13c.rst7.bz2"]
+        ).getMolecule(0)
         atom_mapping = BSS.Align.matchAtoms(m0, m1)
         m0 = BSS.Align.rmsdAlign(m0, m1, atom_mapping)
         merged = BSS.Align.merge(m0, m1)
         return merged.toSystem()
+
+    @pytest.mark.parametrize(
+        "protocol", [Equilibration, Production, FreeEnergyEquilibration, FreeEnergy]
+    )
+    def test_tau_t(self, system, protocol):
+        config = ConfigFactory(system, protocol(tau_t=BSS.Types.Time(2, "picosecond")))
+        res = config.generateGromacsConfig()
+        expected_res = {"tau-t = 2.00000"}
+        assert expected_res.issubset(res)
 
     @pytest.mark.skipif(
         has_gromacs is False, reason="Requires GROMACS to be installed."
@@ -150,6 +203,10 @@ class TestGromacsRBFE:
             assert "init-lambda-state = 6" in mdp_text
 
 
+@pytest.mark.skipif(
+    has_antechamber is False or has_openff is False,
+    reason="Requires ambertools/antechamber and openff to be installed",
+)
 class TestGromacsABFE:
     @staticmethod
     @pytest.fixture(scope="class")
@@ -226,3 +283,27 @@ class TestGromacsABFE:
         with open(f"{freenrg._work_dir}/lambda_6/gromacs.mdp", "r") as f:
             mdp_text = f.read()
             assert "sc-alpha = 0.5" in mdp_text
+
+
+class TestAmberASFE:
+    @staticmethod
+    @pytest.fixture(scope="class")
+    def system():
+        mol = BSS.IO.readMolecules(
+            [f"{url}/CAT-13c.prm7.bz2", f"{url}/CAT-13c.rst7.bz2"]
+        ).getMolecule(0)
+        mol = decouple(mol)
+        return mol.toSystem()
+
+    def test_generate_fep_masks(self, system):
+        config = ConfigFactory(system, FreeEnergyMinimisation())
+        res = config._generate_amber_fep_masks(0.002)
+        expected_res = {
+            "noshakemask": '"@1-45"',
+            "scmask1": '"@1-45"',
+            "scmask2": '""',
+            "timask1": '"@1-45"',
+            "timask2": '""',
+        }
+        for key in expected_res:
+            assert expected_res[key] == res[key]
