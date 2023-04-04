@@ -1488,7 +1488,9 @@ def _removeDummies(molecule, is_lambda1):
     coordinates = molecule._sire_object.property("coordinates0")
 
     # Generate a molecule with all dummies present.
-    molecule = molecule.copy()._toRegularMolecule(is_lambda1=is_lambda1)
+    molecule = molecule.copy()._toRegularMolecule(
+        is_lambda1=is_lambda1, generate_intrascale=True
+    )
 
     # Set the coordinates to those at lambda = 0
     molecule._sire_object = (
