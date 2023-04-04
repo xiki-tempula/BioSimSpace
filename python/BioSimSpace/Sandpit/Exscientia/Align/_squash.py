@@ -8,11 +8,12 @@ import parmed as _pmd
 from sire.legacy import IO as _SireIO
 from sire.legacy import Mol as _SireMol
 
+from ._merge import _removeDummies
 from ..IO import readMolecules as _readMolecules, saveMolecules as _saveMolecules
 from .._SireWrappers import Molecule as _Molecule
 
 
-def _squash(system):
+def _squash(system, explicit_dummies=False):
     """Internal function which converts a merged BioSimSpace system into an AMBER-compatible format, where all perturbed
     molecules are represented sequentially, instead of in a mixed topology, like in GROMACS. In the current
     implementation, all perturbed molecules are moved at the end of the squashed system. For example, if we have an
@@ -34,6 +35,9 @@ def _squash(system):
 
     system : BioSimSpace._SireWrappers.System
         The system.
+
+    explicit_dummies : bool
+        Whether to keep the dummy atoms explicit at the endstates or remove them.
 
     Returns
     -------
@@ -64,7 +68,7 @@ def _squash(system):
     new_indices = list(range(system.nMolecules()))
     for pertmol_idx, pert_mol in zip(pertmol_idxs, pert_mols):
         new_indices.remove(pertmol_idx)
-        new_system += _squash_molecule(pert_mol)
+        new_system += _squash_molecule(pert_mol, explicit_dummies=explicit_dummies)
 
     # Create the old molecule index to new molecule index mapping.
     mapping = {
@@ -74,7 +78,7 @@ def _squash(system):
     return new_system, mapping
 
 
-def _squash_molecule(molecule):
+def _squash_molecule(molecule, explicit_dummies=False):
     """This internal function converts a perturbed molecule to a system that is
     recognisable to the AMBER alchemical code. If the molecule contains a single
     residue, then the squashed system is just the two separate pure endstate
@@ -96,6 +100,9 @@ def _squash_molecule(molecule):
     molecule : BioSimSpace._SireWrappers.Molecule
         The input molecule.
 
+    explicit_dummies : bool
+        Whether to keep the dummy atoms explicit at the endstates or remove them.
+
     Returns
     -------
 
@@ -105,19 +112,23 @@ def _squash_molecule(molecule):
     if not molecule.isPerturbable():
         return molecule
 
-    # We make sure we use the same coordinates at both endstates.
-    c = molecule.copy()._sire_object.cursor()
-    c["coordinates1"] = c["coordinates0"]
-    molecule = _Molecule(c.commit())
+    if explicit_dummies:
+        # We make sure we use the same coordinates at both endstates.
+        c = molecule.copy()._sire_object.cursor()
+        c["coordinates1"] = c["coordinates0"]
+        molecule = _Molecule(c.commit())
 
     # Generate a "system" from the molecule at lambda = 0 and another copy at lambda = 1.
-    # These contain all the dummies because it's not always appropriate to remove them.
-    mol0 = molecule.copy()._toRegularMolecule(
-        is_lambda1=False, convert_amber_dummies=True, generate_intrascale=True
-    )
-    mol1 = molecule.copy()._toRegularMolecule(
-        is_lambda1=True, convert_amber_dummies=True, generate_intrascale=True
-    )
+    if explicit_dummies:
+        mol0 = molecule.copy()._toRegularMolecule(
+            is_lambda1=False, convert_amber_dummies=True, generate_intrascale=True
+        )
+        mol1 = molecule.copy()._toRegularMolecule(
+            is_lambda1=True, convert_amber_dummies=True, generate_intrascale=True
+        )
+    else:
+        mol0 = _removeDummies(molecule, False)
+        mol1 = _removeDummies(molecule, True)
     system = (mol0 + mol1).toSystem()
 
     # We only need to call tiMerge for multi-residue molecules
@@ -421,6 +432,7 @@ def _squashed_atom_mapping_molecule(
     environment=True,
     common=True,
     dummies=True,
+    explicit_dummies=False,
 ):
     """This internal function returns a dictionary whose keys correspond to the atom
     index of the each atom in the original merged molecule, and whose values
@@ -452,6 +464,9 @@ def _squashed_atom_mapping_molecule(
     dummies : bool
         Whether to include all dummy atoms (i.e. ones that are perturbed and are
         dummies in the endstate of interest).
+
+    explicit_dummies : bool
+        Whether to keep the dummy atoms explicit at the endstates or remove them.
 
     Returns
     -------
@@ -506,19 +521,32 @@ def _squashed_atom_mapping_molecule(
             types1 = [
                 atom._sire_object.property("ambertype1") for atom in residue.getAtoms()
             ]
-            dummy_mask = _np.asarray(
-                ["du" in x or "du" in y for x, y in zip(types0, types1)]
-            )
-            mcs_mask = ~dummy_mask
-            # The implementation seems a bit redundant but is useful if we decide to
-            # revert it back to using different number of atoms for the endstates.
-            natoms0 = natoms1 = residue.nAtoms()
+
+            if explicit_dummies:
+                dummy0 = dummy1 = _np.asarray(
+                    ["du" in x or "du" in y for x, y in zip(types0, types1)]
+                )
+                common0 = common1 = ~dummy0
+                in_mol0 = in_mol1 = _np.asarray([True] * residue.nAtoms())
+            else:
+                in_mol0 = _np.asarray(["du" not in x for x in types0])
+                in_mol1 = _np.asarray(["du" not in x for x in types1])
+                dummy0 = ~in_mol1
+                dummy1 = ~in_mol0
+                common0 = _np.logical_and(in_mol0, ~dummy0)
+                common1 = _np.logical_and(in_mol1, ~dummy1)
+
+            ndummy0 = residue.nAtoms() - sum(in_mol1)
+            ndummy1 = residue.nAtoms() - sum(in_mol0)
+            ncommon = residue.nAtoms() - ndummy0 - ndummy1
+            natoms0 = ncommon + ndummy0
+            natoms1 = ncommon + ndummy1
 
             # Determine the full mapping indices for the merged and squashed systems.
             if not is_lambda1:
                 atom_indices = _np.arange(
                     atom_idx_merged, atom_idx_merged + residue.nAtoms()
-                )
+                )[in_mol0]
                 squashed_atom_indices = _np.arange(
                     atom_idx_squashed, atom_idx_squashed + natoms0
                 )
@@ -526,23 +554,27 @@ def _squashed_atom_mapping_molecule(
             else:
                 atom_indices = _np.arange(
                     atom_idx_merged, atom_idx_merged + residue.nAtoms()
-                )
+                )[in_mol1]
                 squashed_atom_indices = _np.arange(
                     atom_idx_squashed_lambda1, atom_idx_squashed_lambda1 + natoms1
                 )
                 mapping_to_update = mapping_lambda1
 
             # Determine which atoms to return.
-            if dummies:
-                mapping_to_update.update(
-                    dict(
-                        zip(atom_indices[dummy_mask], squashed_atom_indices[dummy_mask])
-                    )
-                )
+            in_mol_mask = in_mol1 if is_lambda1 else in_mol0
+            common_mask = common1 if is_lambda1 else common0
+            dummy_mask = dummy1 if is_lambda1 else dummy0
+            update_mask = _np.asarray([False] * atom_indices.size)
+
             if common:
-                mapping_to_update.update(
-                    dict(zip(atom_indices[mcs_mask], squashed_atom_indices[mcs_mask]))
-                )
+                update_mask = _np.logical_or(update_mask, common_mask[in_mol_mask])
+            if dummies:
+                update_mask = _np.logical_or(update_mask, dummy_mask[in_mol_mask])
+
+            # Finally update the relevant mapping
+            mapping_to_update.update(
+                dict(zip(atom_indices[update_mask], squashed_atom_indices[update_mask]))
+            )
 
             # Increment the offsets and continue.
             atom_idx_merged += residue.nAtoms()
@@ -550,7 +582,14 @@ def _squashed_atom_mapping_molecule(
             atom_idx_squashed_lambda1 += natoms1
 
     # Finally add the appropriate offsets
-    offset_squashed_lambda1 = molecule.nAtoms()
+    if explicit_dummies:
+        all_ndummy1 = 0
+    else:
+        all_ndummy1 = sum(
+            "du" in x for x in molecule._sire_object.property("ambertype0").toVector()
+        )
+
+    offset_squashed_lambda1 = molecule.nAtoms() - all_ndummy1
     res = {
         **{offset_merged + k: offset_squashed + v for k, v in mapping.items()},
         **{
